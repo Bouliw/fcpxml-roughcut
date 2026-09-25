@@ -169,7 +169,7 @@ Cutting rules I use (and give to the agent):
 
 ## How I built it
 
-I designed the workflow and co-created the scripts with Claude Code, under strict, targeted requirements: frame-accurate cuts, footage never modified, everything local, and an output I can finish by hand in Final Cut Pro. The division of labour is deliberate: Claude Code proposes the cuts from the transcript, I validate the plan, import the timeline and do the creative part.
+I designed the workflow under strict, targeted requirements: frame-accurate cuts, footage never modified, everything local, and an output I can finish by hand in Final Cut Pro. The division of labour is deliberate: the AI agent proposes the cuts from the transcript, I validate the plan, import the timeline and do the creative part.
 
 ## License
 
