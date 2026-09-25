@@ -1,0 +1,11 @@
+{
+  "project": "Demo rough cut",
+  "clips": [
+    {"file": "demo/talking-head.mp4", "in": 6.60, "out": 10.66, "note": "second take; the false start at 0:00 is dropped"},
+    {"file": "demo/talking-head.mp4", "in": 14.04, "out": 17.80, "marker": "B-roll: screen recording of the terminal"},
+    {"file": "demo/talking-head.mp4", "in": 18.94, "out": 21.76},
+    {"file": "demo/talking-head.mp4", "in": 23.20, "out": 27.68},
+    {"file": "demo/talking-head.mp4", "in": 28.50, "out": 29.74, "note": "Whisper's 'Thank you.' after this is a hallucination on silence"}
+  ],
+  "markers": [{"at": 4.0, "text": "Jump cut: punch-in zoom here"}]
+}

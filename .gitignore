@@ -1,0 +1,20 @@
+# Whisper models and media never belong here
+*.bin
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.mxf
+*.wav
+*.aiff
+*.m4a
+*.mp3
+*.jpg
+
+# Generated outputs (they contain absolute paths to the footage)
+examples/demo/
+*.fcpxml
+*.srt
+
+__pycache__/
+.DS_Store
