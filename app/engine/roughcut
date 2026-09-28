@@ -1,0 +1,54 @@
+#!/bin/bash
+# Runs one of the engine's scripts exactly as Roughcut does: with the tools the app downloaded (Python, ffmpeg,
+# whisper-cli), the transcription model and the language chosen in the app, and the app's projects folder. The app
+# starts its edits through it, and so do the Finder's Quick Action and the scripts one runs by hand: every edit uses
+# the same engine, the one of the Roughcut installed.
+# Usage: bash Roughcut.app/Contents/Resources/engine/roughcut <script> [arguments...]
+#        bash .../roughcut auto_edit.py "Footage folder"      bash .../roughcut --version
+# What the app sets itself (the model, the language, Claude Code's place, the projects folder) wins over what this
+# script reads from the app's preferences.
+set -e
+ENGINE="$(cd "$(dirname "$0")" && pwd)"
+APP="$(cd "$ENGINE/../../.." && pwd)"
+PREFS="${ROUGHCUT_PREFS:-io.github.bouliw.roughcut}"
+pref() { defaults read "$PREFS" "$1" 2>/dev/null || true; }
+plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist" 2>/dev/null || true; }
+SUPPORT="${ROUGHCUT_SUPPORT:-$HOME/Library/Application Support/Roughcut}"
+RUNTIME_VERSION="$(plist RoughcutEngineVersion)"
+RUNTIME="$SUPPORT/engine-${RUNTIME_VERSION:-1}"
+export ROUGHCUT_VERSION="$(plist CFBundleShortVersionString)"
+if [ "$1" = "--version" ]; then echo "Roughcut $ROUGHCUT_VERSION, engine ${RUNTIME_VERSION:-1}"; exit 0; fi
+[ -n "$1" ] || { echo "usage: roughcut <script> [arguments...]" >&2; exit 2; }
+if [ ! -x "$RUNTIME/python/bin/python3" ]; then
+  echo "Roughcut's tools are not installed yet: open Roughcut once, it downloads them." >&2; exit 3
+fi
+export PATH="$RUNTIME/bin:$RUNTIME/python/bin:$HOME/.lmstudio/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PYTHONPYCACHEPREFIX="$SUPPORT/pycache" PYTHONNOUSERSITE=1 PYTHONUNBUFFERED=1
+unset PYTHONHOME PYTHONPATH
+export USER="${USER:-$(id -un)}" LOGNAME="${LOGNAME:-$(id -un)}"  # Claude Code finds its sign-in by the user's name
+if [ -z "$WHISPER_MODEL" ]; then  # the model chosen in the app, turbo by default, wherever it is
+  WHISPER_MODEL="$(pref whisperModel)"; WHISPER_MODEL="${WHISPER_MODEL:-ggml-large-v3-turbo.bin}"
+fi
+if [ -z "$WHISPER_MODEL_DIR" ]; then
+  for d in "$SUPPORT/models" "$HOME/.cache/whisper-cpp"; do
+    if [ -f "$d/$WHISPER_MODEL" ]; then WHISPER_MODEL_DIR="$d"; break; fi
+  done
+fi
+export WHISPER_MODEL WHISPER_MODEL_DIR="${WHISPER_MODEL_DIR:-$SUPPORT/models}"
+if [ -z "$ROUGHCUT_LANG" ]; then  # the app's language: the one chosen in it, else the Mac's
+  l="$(pref language)"
+  [ -n "$l" ] || l="$(defaults read -g AppleLanguages 2>/dev/null | sed -n 2p | tr -d ' ",' | cut -c1-2)"
+  if [ "$l" = fr ]; then ROUGHCUT_LANG=fr; else ROUGHCUT_LANG=en; fi
+fi
+export ROUGHCUT_LANG
+if [ -z "$ROUGHCUT_CLAUDE" ]; then  # Claude Code, wherever its installer put it
+  for c in "$HOME/.local/bin/claude" "$HOME/.claude/local/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
+    if [ -x "$c" ]; then export ROUGHCUT_CLAUDE="$c"; break; fi
+  done
+fi
+if [ -z "$ROUGHCUT_PROJECTS" ]; then p="$(pref projectsFolder)"; export ROUGHCUT_PROJECTS="${p:-$HOME/Movies/Roughcut}"; fi
+script="$1"; shift
+case "$script" in
+  *.sh) exec /bin/bash "$ENGINE/scripts/$script" "$@" ;;
+  *) exec "$RUNTIME/python/bin/python3" "$ENGINE/scripts/$script" "$@" ;;
+esac

@@ -1,0 +1,39 @@
+# Builds Roughcut for a release, by hand (Actions > Release > Run workflow): the app and its disk image, then a draft
+# release holding them with their SHA-256. The engine runtime is published once per version (app/runtime/versions.sh):
+# when RUNTIME_RELEASE names the release being made, it is built here from its pinned sources and added to it.
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Build tools
+        run: brew list pkg-config >/dev/null 2>&1 || brew install pkg-config
+      - name: Engine runtime, when this release carries a new one
+        run: |
+          source app/runtime/versions.sh
+          if [ "$RUNTIME_RELEASE" = "v$(cat app/VERSION)" ]; then app/runtime/build_runtime.sh; fi
+      - name: App and disk image
+        run: app/build_app.sh
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="v$(cat app/VERSION)"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "$version exists already: nothing uploaded"; exit 0
+          fi
+          engine=(); [ -f build/Roughcut-engine-*-arm64.tar.gz ] && engine=(build/Roughcut-engine-*-arm64.tar.gz)
+          gh release create "$version" build/Roughcut-*.dmg "${engine[@]}" build/SHA256SUMS.txt \
+            --draft --title "Roughcut $version" --notes "Download Roughcut-$(cat app/VERSION).dmg, open it and drag Roughcut into Applications. First opening: see Install in the README. The engine archive is downloaded by the app at its first launch."
+          echo "Draft release $version created"

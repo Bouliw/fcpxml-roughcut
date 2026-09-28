@@ -1,0 +1,187 @@
+{
+  "audio": {
+    "dialogue_target_lufs": -16,
+    "max_gain_db": 12,
+    "clip_deviation_lu": 2,
+    "min_measure_seconds": 1.0,
+    "ambient_target_lufs": -25,
+    "ambient_max_boost_db": 6,
+    "ambient_max_cut_db": 15,
+    "fade_seconds": 0.03,
+    "ambient_fade_seconds": 0.25,
+    "voice_isolation": "auto",
+    "voice_isolation_amount": 40,
+    "voice_isolation_below_db": 25
+  },
+  "cuts": {
+    "quiet_ratio": 0.35,
+    "min_quiet_seconds": 0.2,
+    "pause_seconds": 0.5,
+    "max_sentence_seconds": 12,
+    "remove_repeats": true,
+    "hesitations": "all",
+    "splice_level_db": 13.6,
+    "splice_timbre": 1.25,
+    "verify": true,
+    "verify_rounds": 3,
+    "margin_before": 0.08,
+    "margin_after": 0.12,
+    "silence_reach_seconds": 0.35,
+    "silence_room_seconds": 0.04,
+    "min_cut_seconds": 0.6,
+    "min_piece_seconds": 0.4
+  },
+  "roles": {
+    "default_audio": "dialogue"
+  },
+  "quality": {
+    "sample_fps": 3,
+    "width": 640,
+    "blur_sharpness": 150,
+    "shake_jolt": 1.5,
+    "black_luma": 16,
+    "underexposed_luma": 30,
+    "overexposed_share": 0.3,
+    "feet_labels": [
+      "shoes",
+      "footwear",
+      "sandal"
+    ],
+    "ground_labels": [
+      "road",
+      "road_other",
+      "sidewalk",
+      "dirt_road"
+    ],
+    "upright_labels": [
+      "sky",
+      "building",
+      "structure",
+      "tree",
+      "plant",
+      "people",
+      "vehicle",
+      "car",
+      "furniture",
+      "interior_room"
+    ],
+    "ground_confidence": 0.5,
+    "min_reject_seconds": 1.0,
+    "face_cam_area": 0.04,
+    "broll_seconds": 4,
+    "broll_count": 10,
+    "thumbnail_count": 5,
+    "thumbnail_min_face": 0.02,
+    "thumbnail_spacing_seconds": 10,
+    "log_footage": false
+  },
+  "zoom": {
+    "scale": 1.12,
+    "min_cut_seconds": 1.0
+  },
+  "organize": {
+    "face_cam_min_area": 0.01,
+    "min_range_seconds": 2.0,
+    "event_prefix": "Logged – ",
+    "keywords": {
+      "face_cam": "Face cam",
+      "broll": "B-roll",
+      "place": "Place"
+    }
+  },
+  "reframe": {
+    "min_face_area": 0.01,
+    "min_face_share": 0.5,
+    "dead_zone": 0.08,
+    "move_seconds": 0.6
+  },
+  "captions": {
+    "words": 3,
+    "karaoke": false,
+    "font": "Arial Black",
+    "font_size": 0.055,
+    "colour": "#FFFFFF",
+    "highlight_colour": "#FFD400",
+    "outline_colour": "#000000",
+    "outline": 0.08,
+    "pop": 1.12,
+    "uppercase": false,
+    "bottom_margin": 0.08,
+    "bottom_margin_vertical": 0.3
+  },
+  "captions_main": {
+    "words": 3,
+    "karaoke": false,
+    "font": "Arial Black",
+    "font_size": 0.05,
+    "colour": "#FFFFFF",
+    "highlight_colour": "#FFD400",
+    "outline_colour": "#000000",
+    "outline": 0.08,
+    "pop": 1.12,
+    "uppercase": false,
+    "bottom_margin": 0.08,
+    "bottom_margin_vertical": 0.3
+  },
+  "dressing": {
+    "title_seconds": 3.0,
+    "time_seconds": 3.0,
+    "time_gap_minutes": 30,
+    "time_position": [-70, 40],
+    "time_scale": 0.7,
+    "lower_third_seconds": 5.0,
+    "dissolve_seconds": 0.5
+  },
+  "subtitles": {
+    "languages": [],
+    "max_checks": 40
+  },
+  "broll": {
+    "min_seconds": 2.0,
+    "speech_margin": 0.3,
+    "max_face_share": 0.5,
+    "volume_db": -96
+  },
+  "music": {
+    "volume_db": -14,
+    "duck_db": -28,
+    "ramp_down_seconds": 0.3,
+    "ramp_up_seconds": 0.3,
+    "min_gap_seconds": 1.4,
+    "snap_window_seconds": 0.35
+  },
+  "split_edits": {
+    "mode": "auto",
+    "seconds": 0.6,
+    "min_seconds": 0.2
+  },
+  "brain": {
+    "engine": "",
+    "fallback": "local",
+    "claude_model": "",
+    "local_url": "http://localhost:1234/v1",
+    "local_model": "",
+    "local_context": 32768,
+    "api_provider": "anthropic",
+    "api_model": "",
+    "api_url": "",
+    "timeout_seconds": 900
+  },
+  "ui": {
+    "language": "en"
+  },
+  "auto": {
+    "transcription_language": "auto",
+    "library": "",
+    "music_folder": "",
+    "ask_music": true,
+    "zooms": true,
+    "short": 3,
+    "style": "vlog",
+    "cut": "",
+    "review": true,
+    "dressing": "light",
+    "short_skip_opening_seconds": 30,
+    "open_in_final_cut": true
+  }
+}

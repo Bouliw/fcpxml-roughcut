@@ -1,0 +1,3 @@
+# Only to build the runtime, never shipped
+meson
+ninja

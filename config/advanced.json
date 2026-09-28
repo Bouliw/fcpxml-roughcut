@@ -1,0 +1,1083 @@
+{
+  "groups": [
+    {
+      "title": {
+        "en": "Cuts",
+        "fr": "Coupes"
+      },
+      "items": [
+        {
+          "key": "auto.cut",
+          "type": "choice",
+          "options": [
+            {
+              "value": "",
+              "label": {
+                "en": "From the style",
+                "fr": "Selon le style"
+              }
+            },
+            {
+              "value": "light",
+              "label": {
+                "en": "Light",
+                "fr": "Légère"
+              }
+            },
+            {
+              "value": "normal",
+              "label": {
+                "en": "Normal",
+                "fr": "Normale"
+              }
+            },
+            {
+              "value": "tight",
+              "label": {
+                "en": "Tight",
+                "fr": "Serrée"
+              }
+            }
+          ],
+          "label": {
+            "en": "How much is cut",
+            "fr": "Intensité de coupe"
+          },
+          "help": {
+            "en": "Light keeps about 70 % of what is said, Normal half, Tight a third.",
+            "fr": "Légère garde environ 70 % de ce qui est dit, Normale la moitié, Serrée un tiers."
+          }
+        },
+        {
+          "key": "cuts.hesitations",
+          "type": "choice",
+          "options": [
+            {
+              "value": "none",
+              "label": {
+                "en": "None",
+                "fr": "Aucune"
+              }
+            },
+            {
+              "value": "clean",
+              "label": {
+                "en": "Only the clean ones",
+                "fr": "Seulement les nettes"
+              }
+            },
+            {
+              "value": "all",
+              "label": {
+                "en": "All that pass the check",
+                "fr": "Toutes celles qui passent le contrôle"
+              }
+            }
+          ],
+          "label": {
+            "en": "Hesitations (\"euh\") cut",
+            "fr": "Hésitations (« euh ») coupées"
+          },
+          "help": {
+            "en": "Clean: with a silence on both sides. All: also the ones touching the words, cut in the quietest moment, when the join sounds like two words said (level and sound) and the words around it are heard whole; the others stay.",
+            "fr": "Nettes : avec un silence des deux côtés. Toutes : aussi celles collées aux mots, coupées au creux du son, si le raccord sonne comme deux mots dits à la suite (niveau et timbre) et que les mots autour s'entendent en entier ; les autres restent."
+          }
+        },
+        {
+          "key": "cuts.splice_level_db",
+          "type": "number",
+          "min": 3,
+          "max": 30,
+          "step": 0.5,
+          "unit": "dB",
+          "label": {
+            "en": "Join: level jump at most",
+            "fr": "Raccord : saut de niveau au plus"
+          },
+          "help": {
+            "en": "Between the end of one piece and the start of the next, where a hesitation touching the words was cut. 9 in 10 joins between two words said stay under the default.",
+            "fr": "Entre la fin d'un morceau et le début du suivant, là où une hésitation collée aux mots a été coupée. 9 enchaînements naturels sur 10 restent sous la valeur par défaut."
+          }
+        },
+        {
+          "key": "cuts.splice_timbre",
+          "type": "number",
+          "min": 0.3,
+          "max": 3,
+          "step": 0.05,
+          "label": {
+            "en": "Join: change of sound at most",
+            "fr": "Raccord : changement de timbre au plus"
+          },
+          "help": {
+            "en": "The difference of the sound's spectrum on either side of the join.",
+            "fr": "L'écart de spectre du son de part et d'autre du raccord."
+          }
+        },
+        {
+          "key": "cuts.verify",
+          "type": "bool",
+          "label": {
+            "en": "Listen to the edit once assembled",
+            "fr": "Réécouter le montage assemblé"
+          },
+          "help": {
+            "en": "Transcribes the finished edit again, fixes the words cut and the hesitations left, and times the captions on it.",
+            "fr": "Retranscrit le montage fini, corrige les mots coupés et les hésitations restantes, et y cale les sous-titres."
+          }
+        },
+        {
+          "key": "cuts.verify_rounds",
+          "type": "int",
+          "min": 1,
+          "max": 5,
+          "step": 1,
+          "label": {
+            "en": "Listenings at most",
+            "fr": "Écoutes au plus"
+          },
+          "help": {
+            "en": "It listens again after each fix, until nothing is left to fix or this many times.",
+            "fr": "Il réécoute après chaque correction, jusqu'à ce qu'il n'y ait plus rien à corriger ou ce nombre de fois."
+          }
+        },
+        {
+          "key": "cuts.pause_seconds",
+          "type": "number",
+          "min": 0.2,
+          "max": 2.0,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "Pauses cut from",
+            "fr": "Blancs coupés à partir de"
+          },
+          "help": {
+            "en": "A silence longer than this between two words is cut out.",
+            "fr": "Un silence plus long que ça entre deux mots est retiré."
+          }
+        },
+        {
+          "key": "cuts.remove_repeats",
+          "type": "bool",
+          "label": {
+            "en": "Cut the words said twice",
+            "fr": "Couper les mots redits"
+          },
+          "help": {
+            "en": "A word or a start said again at once (\"we went, we went to the lake\"): the first take goes.",
+            "fr": "Un mot ou un début redit aussitôt (« on est allés, on est allés au lac ») : la première prise part."
+          }
+        },
+        {
+          "key": "cuts.silence_reach_seconds",
+          "type": "number",
+          "min": 0.1,
+          "max": 0.8,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "Search for a silence up to",
+            "fr": "Chercher un silence jusqu'à"
+          },
+          "help": {
+            "en": "How far a cut may move from where Whisper times a word, to fall in a true silence.",
+            "fr": "Jusqu'où une coupe peut s'écarter du repère de Whisper pour tomber dans un vrai silence."
+          }
+        },
+        {
+          "key": "cuts.silence_room_seconds",
+          "type": "number",
+          "min": 0.0,
+          "max": 0.2,
+          "step": 0.01,
+          "unit": "s",
+          "label": {
+            "en": "Silence kept next to the words",
+            "fr": "Silence gardé contre les mots"
+          },
+          "help": {
+            "en": "A little of the silence kept at each cut, so it never falls on the first or last sound of a word.",
+            "fr": "Un peu de silence gardé à chaque coupe, pour ne jamais tomber sur le premier ou le dernier son d'un mot."
+          }
+        },
+        {
+          "key": "cuts.margin_before",
+          "type": "number",
+          "min": 0.0,
+          "max": 0.3,
+          "step": 0.01,
+          "unit": "s",
+          "label": {
+            "en": "Margin before a word (no clear silence)",
+            "fr": "Marge avant un mot (sans silence net)"
+          },
+          "help": {
+            "en": "Used where the sound cannot be read (music, noise).",
+            "fr": "Utilisée là où le son ne se lit pas (musique, bruit)."
+          }
+        },
+        {
+          "key": "cuts.margin_after",
+          "type": "number",
+          "min": 0.0,
+          "max": 0.3,
+          "step": 0.01,
+          "unit": "s",
+          "label": {
+            "en": "Margin after a word (no clear silence)",
+            "fr": "Marge après un mot (sans silence net)"
+          },
+          "help": {
+            "en": "Used where the sound cannot be read (music, noise).",
+            "fr": "Utilisée là où le son ne se lit pas (musique, bruit)."
+          }
+        },
+        {
+          "key": "cuts.min_cut_seconds",
+          "type": "number",
+          "min": 0.2,
+          "max": 2.0,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "Shortest cut",
+            "fr": "Plan le plus court"
+          },
+          "help": {
+            "en": "A piece shorter than this flashes by: it joins its neighbour across a short pause.",
+            "fr": "Un morceau plus court passe trop vite : il rejoint son voisin par-dessus un court silence."
+          }
+        },
+        {
+          "key": "cuts.min_piece_seconds",
+          "type": "number",
+          "min": 0.1,
+          "max": 1.5,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "Hesitation left in when",
+            "fr": "Hésitation gardée si"
+          },
+          "help": {
+            "en": "A hesitation stays when cutting it would leave a piece shorter than this: it would break the sentence.",
+            "fr": "Une hésitation reste si la couper laisse un morceau plus court que ça : ça casserait la phrase."
+          }
+        },
+        {
+          "key": "cuts.max_sentence_seconds",
+          "type": "number",
+          "min": 4,
+          "max": 30,
+          "step": 1,
+          "unit": "s",
+          "label": {
+            "en": "Longest line shown to the brain",
+            "fr": "Ligne la plus longue montrée au cerveau"
+          },
+          "help": {
+            "en": "A longer sentence is cut where the speaker breathes, so part of it can be kept.",
+            "fr": "Une phrase plus longue est coupée là où l'on respire, pour pouvoir n'en garder qu'une partie."
+          }
+        },
+        {
+          "key": "auto.review",
+          "type": "bool",
+          "label": {
+            "en": "Read the edit again as a viewer",
+            "fr": "Relire le montage comme un spectateur"
+          },
+          "help": {
+            "en": "Fixes what does not follow: a reference to a cut passage, a question without its answer...",
+            "fr": "Corrige ce qui ne se suit pas : une référence à un passage coupé, une question sans réponse…"
+          }
+        },
+        {
+          "key": "auto.short_skip_opening_seconds",
+          "type": "number",
+          "min": 0,
+          "max": 120,
+          "step": 5,
+          "unit": "s",
+          "label": {
+            "en": "Shorts never from the first",
+            "fr": "Shorts jamais pris dans les premières"
+          },
+          "help": {
+            "en": "The opening of the video (an introduction) makes a poor Short.",
+            "fr": "L'ouverture de la vidéo (une introduction) fait un mauvais Short."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Sound",
+        "fr": "Son"
+      },
+      "items": [
+        {
+          "key": "audio.voice_isolation",
+          "type": "choice",
+          "options": [
+            {
+              "value": "auto",
+              "label": {
+                "en": "When the background is loud",
+                "fr": "Quand le fond est bruyant"
+              }
+            },
+            {
+              "value": "off",
+              "label": {
+                "en": "Never",
+                "fr": "Jamais"
+              }
+            },
+            {
+              "value": "always",
+              "label": {
+                "en": "Always",
+                "fr": "Toujours"
+              }
+            }
+          ],
+          "label": {
+            "en": "Voice isolation (Final Cut Pro)",
+            "fr": "Isolation de la voix (Final Cut Pro)"
+          },
+          "help": {
+            "en": "Final Cut Pro's own Voice Isolation on the speech. Used when the background is loud, that is when the voice stands less than the threshold set below above it (walking, among people); never on a quiet interview.",
+            "fr": "L'isolation de la voix de Final Cut Pro sur la parole. Utilisée quand le fond est bruyant, c'est-à-dire quand la voix le dépasse de moins que le seuil réglé ci-dessous (en marchant, au milieu des gens) ; jamais sur une interview au calme."
+          }
+        },
+        {
+          "key": "audio.voice_isolation_below_db",
+          "type": "number",
+          "min": 5,
+          "max": 50,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "Loud background: voice less than",
+            "fr": "Fond bruyant : voix à moins de"
+          },
+          "help": {
+            "en": "Above the background. Measured on real footage: 40 to 46 dB somewhere quiet, 18 to 24 outside or among people.",
+            "fr": "Au-dessus du fond. Mesuré sur de vrais rushs : 40 à 46 dB au calme, 18 à 24 dehors ou au milieu des gens."
+          }
+        },
+        {
+          "key": "audio.voice_isolation_amount",
+          "type": "int",
+          "min": 10,
+          "max": 80,
+          "step": 5,
+          "unit": "%",
+          "label": {
+            "en": "Voice isolation amount",
+            "fr": "Intensité de l'isolation"
+          },
+          "help": {
+            "en": "Kept moderate: too strong makes a voice sound processed.",
+            "fr": "Gardée modérée : trop forte, la voix sonne traitée."
+          }
+        },
+        {
+          "key": "audio.dialogue_target_lufs",
+          "type": "number",
+          "min": -30,
+          "max": -10,
+          "step": 1,
+          "unit": "LUFS",
+          "label": {
+            "en": "Voice level",
+            "fr": "Niveau de la voix"
+          },
+          "help": {
+            "en": "Every cut is brought towards this loudness.",
+            "fr": "Chaque plan est ramené vers ce niveau."
+          }
+        },
+        {
+          "key": "audio.max_gain_db",
+          "type": "number",
+          "min": 0,
+          "max": 24,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "Voice raised at most by",
+            "fr": "Voix remontée au plus de"
+          },
+          "help": {
+            "en": "A quiet cut is raised no more than this, not to turn its hiss up.",
+            "fr": "Un plan trop bas n'est pas remonté plus que ça, pour ne pas monter le souffle."
+          }
+        },
+        {
+          "key": "audio.clip_deviation_lu",
+          "type": "number",
+          "min": 0.5,
+          "max": 6,
+          "step": 0.5,
+          "unit": "LU",
+          "label": {
+            "en": "A cut gets its own level beyond",
+            "fr": "Un plan a son propre niveau au-delà de"
+          },
+          "help": {
+            "en": "Cuts of one take share one gain, unless one stands out by more than this.",
+            "fr": "Les plans d'une même prise partagent un gain, sauf si l'un s'écarte de plus que ça."
+          }
+        },
+        {
+          "key": "audio.ambient_target_lufs",
+          "type": "number",
+          "min": -40,
+          "max": -15,
+          "step": 1,
+          "unit": "LUFS",
+          "label": {
+            "en": "Level of the IRL moments",
+            "fr": "Niveau des moments IRL"
+          },
+          "help": {
+            "en": "Moments played for their own sound are brought towards this, under the voice.",
+            "fr": "Les moments joués avec leur propre son sont ramenés vers ce niveau, sous la voix."
+          }
+        },
+        {
+          "key": "audio.ambient_max_boost_db",
+          "type": "number",
+          "min": 0,
+          "max": 18,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "IRL moments raised at most by",
+            "fr": "Moments IRL remontés au plus de"
+          },
+          "help": {
+            "en": "A quiet moment is raised no more than this.",
+            "fr": "Un moment calme n'est pas remonté plus que ça."
+          }
+        },
+        {
+          "key": "audio.ambient_max_cut_db",
+          "type": "number",
+          "min": 0,
+          "max": 30,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "IRL moments lowered at most by",
+            "fr": "Moments IRL baissés au plus de"
+          },
+          "help": {
+            "en": "A loud moment (wind, traffic) is lowered no more than this.",
+            "fr": "Un moment fort (vent, circulation) n'est pas baissé plus que ça."
+          }
+        },
+        {
+          "key": "audio.fade_seconds",
+          "type": "number",
+          "min": 0.0,
+          "max": 0.2,
+          "step": 0.01,
+          "unit": "s",
+          "label": {
+            "en": "Sound fade at each cut",
+            "fr": "Fondu du son à chaque coupe"
+          },
+          "help": {
+            "en": "So no cut clicks or jumps in room tone.",
+            "fr": "Pour qu'aucune coupe ne claque ni ne fasse sauter l'ambiance."
+          }
+        },
+        {
+          "key": "audio.ambient_fade_seconds",
+          "type": "number",
+          "min": 0.0,
+          "max": 1.0,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "Sound fade of the IRL moments",
+            "fr": "Fondu du son des moments IRL"
+          },
+          "help": {
+            "en": "Their sound comes in and goes out softly.",
+            "fr": "Leur son entre et sort en douceur."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Music",
+        "fr": "Musique"
+      },
+      "items": [
+        {
+          "key": "music.volume_db",
+          "type": "number",
+          "min": -30,
+          "max": 0,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "Music level with no speech",
+            "fr": "Niveau de la musique sans parole"
+          },
+          "help": {
+            "en": "Where nobody speaks.",
+            "fr": "Là où personne ne parle."
+          }
+        },
+        {
+          "key": "music.duck_db",
+          "type": "number",
+          "min": -40,
+          "max": -6,
+          "step": 1,
+          "unit": "dB",
+          "label": {
+            "en": "Music under the voice",
+            "fr": "Musique sous la voix"
+          },
+          "help": {
+            "en": "Its level while someone speaks.",
+            "fr": "Son niveau pendant qu'on parle."
+          }
+        },
+        {
+          "key": "music.ramp_down_seconds",
+          "type": "number",
+          "min": 0.1,
+          "max": 3,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "Music going down in",
+            "fr": "La musique descend en"
+          },
+          "help": {
+            "en": "Before the voice comes in.",
+            "fr": "Avant que la voix arrive."
+          }
+        },
+        {
+          "key": "music.ramp_up_seconds",
+          "type": "number",
+          "min": 0.1,
+          "max": 3,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "Music coming back up in",
+            "fr": "La musique remonte en"
+          },
+          "help": {
+            "en": "Once the voice has stopped.",
+            "fr": "Une fois la voix finie."
+          }
+        },
+        {
+          "key": "music.min_gap_seconds",
+          "type": "number",
+          "min": 0.5,
+          "max": 5,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "Music back up only for pauses of",
+            "fr": "La musique ne remonte que pour des blancs de"
+          },
+          "help": {
+            "en": "A shorter pause keeps it down.",
+            "fr": "Un blanc plus court la laisse basse."
+          }
+        },
+        {
+          "key": "music.snap_window_seconds",
+          "type": "number",
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "unit": "s",
+          "label": {
+            "en": "B-roll moved onto a beat within",
+            "fr": "Plans de coupe calés sur le tempo à"
+          },
+          "help": {
+            "en": "A B-roll cut moves to the nearest beat when one is this near.",
+            "fr": "Une coupe de plan de coupe se cale sur le temps de la musique le plus proche s'il est aussi près."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Picture",
+        "fr": "Image"
+      },
+      "items": [
+        {
+          "key": "zoom.scale",
+          "type": "number",
+          "min": 1.02,
+          "max": 1.4,
+          "step": 0.01,
+          "unit": "×",
+          "label": {
+            "en": "Zoom on jump cuts",
+            "fr": "Zoom sur les jump cuts"
+          },
+          "help": {
+            "en": "Every other cut of a take is enlarged this much, anchored on the face.",
+            "fr": "Un plan sur deux d'une même prise est agrandi d'autant, centré sur le visage."
+          }
+        },
+        {
+          "key": "zoom.min_cut_seconds",
+          "type": "number",
+          "min": 0.3,
+          "max": 3,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "No zoom on cuts shorter than",
+            "fr": "Pas de zoom sur les plans de moins de"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "reframe.dead_zone",
+          "type": "number",
+          "min": 0,
+          "max": 0.3,
+          "step": 0.01,
+          "label": {
+            "en": "Shorts: frame still while the face moves less than",
+            "fr": "Shorts : cadre immobile tant que le visage bouge de moins de"
+          },
+          "help": {
+            "en": "A share of the frame's width.",
+            "fr": "Une part de la largeur du cadre."
+          }
+        },
+        {
+          "key": "reframe.move_seconds",
+          "type": "number",
+          "min": 0.2,
+          "max": 2,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "Shorts: frame moves in",
+            "fr": "Shorts : le cadre se déplace en"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "split_edits.seconds",
+          "type": "number",
+          "min": 0.2,
+          "max": 1.5,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "J and L cuts",
+            "fr": "J-cuts et L-cuts"
+          },
+          "help": {
+            "en": "Where the scene changes, the sound starts before the picture (or runs after it) by this much.",
+            "fr": "Là où la scène change, le son commence avant l'image (ou continue après) d'autant."
+          }
+        },
+        {
+          "key": "broll.min_seconds",
+          "type": "number",
+          "min": 1,
+          "max": 6,
+          "step": 0.5,
+          "unit": "s",
+          "label": {
+            "en": "Shortest B-roll",
+            "fr": "Plan de coupe le plus court"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Dressing",
+        "fr": "Habillage"
+      },
+      "items": [
+        {
+          "key": "dressing.title_seconds",
+          "type": "number",
+          "min": 1,
+          "max": 8,
+          "step": 0.5,
+          "unit": "s",
+          "label": {
+            "en": "Chapter titles on screen",
+            "fr": "Titres de chapitre à l'écran"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "dressing.time_seconds",
+          "type": "number",
+          "min": 1,
+          "max": 8,
+          "step": 0.5,
+          "unit": "s",
+          "label": {
+            "en": "Time of day on screen",
+            "fr": "Heure à l'écran"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "dressing.time_gap_minutes",
+          "type": "int",
+          "min": 5,
+          "max": 180,
+          "step": 5,
+          "unit": "min",
+          "label": {
+            "en": "Time shown again after a jump of",
+            "fr": "Heure réaffichée après un saut de"
+          },
+          "help": {
+            "en": "Besides each chapter.",
+            "fr": "En plus de chaque chapitre."
+          }
+        },
+        {
+          "key": "dressing.lower_third_seconds",
+          "type": "number",
+          "min": 2,
+          "max": 10,
+          "step": 0.5,
+          "unit": "s",
+          "label": {
+            "en": "Lower thirds on screen",
+            "fr": "Bandeaux à l'écran"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "dressing.dissolve_seconds",
+          "type": "number",
+          "min": 0.2,
+          "max": 2,
+          "step": 0.1,
+          "unit": "s",
+          "label": {
+            "en": "Dissolves",
+            "fr": "Fondus"
+          },
+          "help": {
+            "en": "Shorter where the clips do not have the media.",
+            "fr": "Plus courts là où les plans n'ont pas l'image nécessaire."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Captions and subtitles",
+        "fr": "Sous-titres"
+      },
+      "items": [
+        {
+          "key": "captions_main.outline",
+          "type": "number",
+          "min": 0,
+          "max": 0.3,
+          "step": 0.01,
+          "label": {
+            "en": "Edit: outline",
+            "fr": "Montage : contour"
+          },
+          "help": {
+            "en": "A share of the text size.",
+            "fr": "Une part de la taille du texte."
+          }
+        },
+        {
+          "key": "captions_main.pop",
+          "type": "number",
+          "min": 1,
+          "max": 1.4,
+          "step": 0.02,
+          "unit": "×",
+          "label": {
+            "en": "Edit: word being said, bigger by",
+            "fr": "Montage : mot prononcé agrandi de"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "captions_main.uppercase",
+          "type": "bool",
+          "label": {
+            "en": "Edit: capitals",
+            "fr": "Montage : majuscules"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "captions_main.words",
+          "type": "int",
+          "min": 1,
+          "max": 8,
+          "step": 1,
+          "label": {
+            "en": "Edit: words on screen at most",
+            "fr": "Montage : mots à l'écran au plus"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "captions.outline",
+          "type": "number",
+          "min": 0,
+          "max": 0.3,
+          "step": 0.01,
+          "label": {
+            "en": "Shorts: outline",
+            "fr": "Shorts : contour"
+          },
+          "help": {
+            "en": "A share of the text size.",
+            "fr": "Une part de la taille du texte."
+          }
+        },
+        {
+          "key": "captions.pop",
+          "type": "number",
+          "min": 1,
+          "max": 1.4,
+          "step": 0.02,
+          "unit": "×",
+          "label": {
+            "en": "Shorts: word being said, bigger by",
+            "fr": "Shorts : mot prononcé agrandi de"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "captions.uppercase",
+          "type": "bool",
+          "label": {
+            "en": "Shorts: capitals",
+            "fr": "Shorts : majuscules"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "captions.words",
+          "type": "int",
+          "min": 1,
+          "max": 8,
+          "step": 1,
+          "label": {
+            "en": "Shorts: words on screen at most",
+            "fr": "Shorts : mots à l'écran au plus"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        },
+        {
+          "key": "subtitles.languages",
+          "type": "list",
+          "label": {
+            "en": "Languages of the SRT files",
+            "fr": "Langues des fichiers SRT"
+          },
+          "help": {
+            "en": "Codes separated by commas (fr, en, es...). Empty: the language of the footage and English.",
+            "fr": "Codes séparés par des virgules (fr, en, es…). Vide : la langue des rushs et l'anglais."
+          }
+        },
+        {
+          "key": "subtitles.max_checks",
+          "type": "int",
+          "min": 0,
+          "max": 200,
+          "step": 10,
+          "label": {
+            "en": "Words to check, at most",
+            "fr": "Mots à vérifier, au plus"
+          },
+          "help": {
+            "en": "Per video.",
+            "fr": "Par vidéo."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Looking at the footage",
+        "fr": "Analyse des rushs"
+      },
+      "items": [
+        {
+          "key": "quality.blur_sharpness",
+          "type": "number",
+          "min": 20,
+          "max": 600,
+          "step": 10,
+          "label": {
+            "en": "Blurred below this sharpness",
+            "fr": "Flou sous cette netteté"
+          },
+          "help": {
+            "en": "Higher: more shots taken as blurred.",
+            "fr": "Plus haut : plus de plans jugés flous."
+          }
+        },
+        {
+          "key": "quality.shake_jolt",
+          "type": "number",
+          "min": 0.5,
+          "max": 5,
+          "step": 0.1,
+          "label": {
+            "en": "Shaky above",
+            "fr": "Tremblé au-dessus de"
+          },
+          "help": {
+            "en": "Lower: more shots taken as shaky.",
+            "fr": "Plus bas : plus de plans jugés tremblés."
+          }
+        },
+        {
+          "key": "quality.underexposed_luma",
+          "type": "number",
+          "min": 5,
+          "max": 80,
+          "step": 1,
+          "label": {
+            "en": "Too dark below",
+            "fr": "Trop sombre sous"
+          },
+          "help": {
+            "en": "Average brightness, 0 to 255.",
+            "fr": "Luminosité moyenne, de 0 à 255."
+          }
+        },
+        {
+          "key": "quality.broll_count",
+          "type": "int",
+          "min": 0,
+          "max": 40,
+          "step": 1,
+          "label": {
+            "en": "B-roll shots offered per clip",
+            "fr": "Plans de coupe proposés par rush"
+          },
+          "help": {
+            "en": "",
+            "fr": ""
+          }
+        }
+      ]
+    },
+    {
+      "title": {
+        "en": "Brain",
+        "fr": "Cerveau"
+      },
+      "items": [
+        {
+          "key": "brain.timeout_seconds",
+          "type": "int",
+          "min": 60,
+          "max": 3600,
+          "step": 60,
+          "unit": "s",
+          "label": {
+            "en": "Longest wait for an answer",
+            "fr": "Attente maximale d'une réponse"
+          },
+          "help": {
+            "en": "Beyond, the edit goes on without it.",
+            "fr": "Au-delà, le montage continue sans."
+          }
+        },
+        {
+          "key": "brain.claude_model",
+          "type": "text",
+          "label": {
+            "en": "Claude model",
+            "fr": "Modèle Claude"
+          },
+          "help": {
+            "en": "Empty: Claude Code's own choice.",
+            "fr": "Vide : le choix de Claude Code."
+          }
+        },
+        {
+          "key": "brain.local_context",
+          "type": "int",
+          "min": 4096,
+          "max": 262144,
+          "step": 4096,
+          "label": {
+            "en": "Local model: context",
+            "fr": "Modèle local : contexte"
+          },
+          "help": {
+            "en": "In tokens.",
+            "fr": "En jetons."
+          }
+        }
+      ]
+    }
+  ]
+}

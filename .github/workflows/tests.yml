@@ -1,0 +1,39 @@
+# Runs the tests on every push and pull request: time maths, FCPXML, subtitles, transcript,
+# ffprobe on generated files, and the DTD check (xmllint). No footage and no Whisper model needed.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: ffmpeg
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg libxml2-utils && pip install numpy anthropic
+      - name: Shell scripts parse
+        run: for f in scripts/*.sh examples/*.sh; do bash -n "$f"; done
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+  app:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Roughcut builds
+        run: swift build -c release --package-path app
+      - name: Build scripts parse
+        run: for f in app/build_app.sh app/runtime/*.sh; do bash -n "$f"; done

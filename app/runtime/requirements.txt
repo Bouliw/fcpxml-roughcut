@@ -1,0 +1,4 @@
+# Python packages of the engine runtime (the scripts' imports), for build_runtime.sh
+numpy
+pyobjc-framework-Vision
+anthropic
