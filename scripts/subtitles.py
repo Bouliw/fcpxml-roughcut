@@ -31,11 +31,11 @@ UI = {'en': {'title': 'Words to check by ear before publishing (proper nouns not
              'header': '# The captions of this video, one subtitle per line. Fix a word, keep the time at the start of '
              'the line,\n# then Roughcut › Regenerate the captions. Lines starting with # are notes, left as they are.'},
       'fr': {'title': 'Mots à vérifier à l\'écoute avant de publier (noms propres pas sûrs, mots que la transcription a pu mal entendre).',
-             'fix': 'Corrige-les dans captions.txt, puis Roughcut › Regénérer les sous-titres.', 'video': 'Montage principal',
+             'fix': 'Corrigez-les dans captions.txt, puis Roughcut › Regénérer les sous-titres.', 'video': 'Montage principal',
              'none': 'Rien à vérifier.', 'fixed': '{n} faute(s) évidente(s) corrigée(s) (majuscules, apostrophes, espaces).',
              'untranslated': '{n} sous-titre(s) n\'ont pas pu être traduits : ils restent dans leur langue dans {files}.',
              'marker': 'À vérifier : {word}',
-             'header': '# Les sous-titres de cette vidéo, un par ligne. Corrige un mot en gardant l\'heure en début de '
+             'header': '# Les sous-titres de cette vidéo, un par ligne. Corrigez un mot en gardant l\'heure en début de '
              'ligne,\n# puis Roughcut › Regénérer les sous-titres. Les lignes qui commencent par # sont des notes.'}}
 
 PROMPT = """You prepare the subtitles of a YouTube video for viewers who speak {langs}. Below are its subtitles,

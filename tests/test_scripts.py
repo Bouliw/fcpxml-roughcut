@@ -1065,10 +1065,10 @@ class BrainTest(unittest.TestCase):
     def test_questions_keep_their_accents(self):
         self.assertEqual(brain.applescript('demandé « x » "y" \\'), '"demandé « x » \\"y\\" \\\\"')
         self.tool('osascript', 'printf "%s" "$4" > "$(dirname "$0")/script.txt"; echo /tmp/music\n')  # -e activate -e script
-        status, folder = brain.dialog_folder('Choisis ton dossier (demandé une seule fois)')
+        status, folder = brain.dialog_folder('Choisissez votre dossier (demandé une seule fois)')
         self.assertEqual((status, folder), ('ok', '/tmp/music'))
         with open(os.path.join(self.bin, 'script.txt'), encoding='utf-8') as f:
-            self.assertIn('prompt "Choisis ton dossier (demandé une seule fois)"', f.read())  # never \\u00e9
+            self.assertIn('prompt "Choisissez votre dossier (demandé une seule fois)"', f.read())  # never \\u00e9
 
     def test_no_key_says_how_to_add_one(self):
         self.tool('security', 'exit 44\n')
