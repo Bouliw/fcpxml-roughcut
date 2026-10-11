@@ -352,6 +352,21 @@ python3 scripts/organize.py footage/*.MP4 -o logged.fcpxml --analysis analysis -
 
 `at_source` is a time in the talking-head clip, read in its transcript: the scripts find where it landed in the edit (`at` gives a timeline time instead). Each shot becomes a connected clip above the talking head, its sound turned down to -96 dB with the Effects role (it can be brought back), with a marker "B-roll: …" so every placement gets checked. Shots that overlap go one lane up; captions sit above them. The preview shows the B-roll over the picture while the talking head is still heard.
 
+### B-roll finder (experimental module, off by default)
+
+`modules/b-roll-finder` is an optional Claude Code skill that finds B-roll from outside the footage for an edit Roughcut made. It reads the transcript, sorts each moment (a place, a person, a figure, a news item, an idea), looks for free-licence visuals first (Wikimedia Commons, captures of official pages, graphics rendered locally with Hyperframes) and shows a contact sheet where every candidate carries its licence; a YouTube excerpt from someone else's channel is marked as a claim risk. Nothing is placed before you pick. The picks then become connected clips in a new FCPXML, each landing just after the word it illustrates, built by Roughcut's own `make_fcpxml.py` (the edit's `edl.json` is left untouched), with a `CREDITS.txt` for the video description.
+
+It is experimental: it has not been tried on a real edit yet. It is off by default: the app and the scripts never call it, and Claude Code only sees it once it is linked into a skills folder:
+
+```bash
+mkdir -p .claude/skills && ln -s ../../modules/b-roll-finder .claude/skills/b-roll-finder   # for this clone only
+sh modules/b-roll-finder/setup.sh --check   # yt-dlp, ImageMagick, Node 22, Hyperframes, Chrome, a Python venv with Pillow
+```
+
+Without `--check`, `setup.sh` installs what is missing (with Homebrew). Then ask Claude Code to find B-roll for a Roughcut project folder. The first run asks a few questions (B-roll sound, stills motion, on-screen credits, brand colours, your own channel) and writes the answers in `TASTE.md`, which ships blank.
+
+The module is adapted from [louisedesadeleer/b-roll-finder](https://github.com/louisedesadeleer/b-roll-finder) by Louise de Sadeleer, under the MIT license ([its license](modules/b-roll-finder/LICENSE)): the method, the page capture and still-zoom scripts, and the example taste profile `TASTE.example.md`, which is hers. Changed here: Roughcut's transcript, placement in Final Cut Pro instead of a rendered video, free licences first with the licence shown on the contact sheet, and Hyperframes instead of Remotion.
+
 ## Music
 
 `music.py` gives the tempo and beats of each track (librosa, or the one of fcp-mcp-server through `uvx` when librosa is not installed; cached) and ranks the tracks of a folder for an edit: long enough first, then the closest to its length, then a tempo in the range asked for. The editor picks.
@@ -544,6 +559,7 @@ No footage is needed. The tests cover:
 - **Transcripts and subtitles**: subtitle timing, the transcript (hesitations, invented and untimed words), the languages of a clip (each run in its own, cut in the pauses, with a stand-in whisper-cli; and with the real one, a French clip with an English answer spoken by macOS voices), cuts written from sentence ranges, accented file names, settings files.
 - **Sound and picture**: dialogue gains and roles, punch-in zooms (and their preview, checked on the picture: the face stays in place and grows by 12 %), the logged event, the frame that follows a face across a vertical preview (checked on the picture), captions (one event per word, rendered with transparency: opaque while a word is said, empty in silence).
 - **B-roll and music**: B-roll placed where the talking head says it, a lane up when two overlap, over the preview while the talking head is still heard, and its catalogue; music (the ducking envelope, B-roll snapped to beats, and a real mix where the music is 14 dB lower under speech).
+- **The B-roll finder module**: a word found in the transcript whatever its accents and apostrophes, the licences kept and the contact-sheet badges (with Pillow), and a beat placed by Roughcut's own scripts in a real FCPXML, just after its word, while a word cut out of the edit is dropped and reported and the edit's `edl.json` stays untouched.
 - **Editing choices**: scripts (the complete take of a paragraph said twice, a sentence never said, the hesitation left out of the cuts), J and L cuts (made where both sides are free of speech, left straight otherwise, and heard in the preview before the picture cuts), the brain (Claude Code, a usage limit handing over to a local server, OpenAI and Anthropic keys from the keychain against stand-in servers, the first-launch choice, a question nobody answers), the merge into one event, the Quick Action files.
 - **The whole automatic edit** of two generated clips: one file, one dated event, the edit, the Shorts and the logged clips, several Shorts from different moments; a new version from edited choices; no answer from the brain. It also runs on a folder without video, a clip without sound, a damaged cache, two edits of the same footage at once, a cancel from the app, and captions in a folder named with an apostrophe, a colon and a comma.
 - **With Final Cut Pro installed**: timelines using every feature are validated against its real DTDs, in every version.
@@ -559,4 +575,4 @@ Measured on a MacBook Pro M4 Max with large-v3-turbo: transcription takes about 
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). The B-roll finder module is adapted from [louisedesadeleer/b-roll-finder](https://github.com/louisedesadeleer/b-roll-finder), MIT, copyright (c) 2026 Louise de Sadeleer: see [modules/b-roll-finder/LICENSE](modules/b-roll-finder/LICENSE).

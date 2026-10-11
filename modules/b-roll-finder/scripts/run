@@ -1,0 +1,8 @@
+#!/bin/sh
+# Runs a script of this skill with the Python setup.sh prepared (Pillow, websockets), else python3.
+# Usage: run SCRIPT.py [args]      e.g. run contact_sheet.py b-roll/candidates.json
+here=$(cd "$(dirname "$0")" && pwd)
+py="${XDG_DATA_HOME:-$HOME/.local/share}/b-roll-finder/venv/bin/python"
+[ -x "$py" ] || py=python3
+script=$1; shift
+exec "$py" "$here/$script" "$@"

@@ -24,7 +24,7 @@ jobs:
       - name: ffmpeg
         run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg libxml2-utils && pip install numpy anthropic
       - name: Shell scripts parse
-        run: for f in scripts/*.sh examples/*.sh; do bash -n "$f"; done
+        run: for f in scripts/*.sh examples/*.sh modules/*/*.sh modules/*/scripts/*.sh modules/*/scripts/run; do bash -n "$f"; done
       - name: Tests
         run: python -m unittest discover -s tests -v
 

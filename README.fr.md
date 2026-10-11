@@ -352,6 +352,21 @@ python3 scripts/organize.py footage/*.MP4 -o logged.fcpxml --analysis analysis -
 
 `at_source` est un temps dans le clip face caméra, lu dans sa transcription : les scripts retrouvent où il est tombé dans le montage (`at` donne plutôt un temps de la timeline). Chaque plan devient un clip connecté au-dessus du face caméra, son son baissé à -96 dB avec le rôle Effets (on peut le remonter), avec un marqueur « B-roll : … » pour que chaque pose soit vérifiée. Les plans qui se chevauchent montent d'une piste ; les sous-titres passent au-dessus. L'aperçu montre le B-roll par-dessus l'image, et le face caméra reste audible.
 
+### Recherche de B-roll (module expérimental, désactivé par défaut)
+
+`modules/b-roll-finder` est une skill Claude Code optionnelle qui cherche des plans de coupe hors des rushs pour un montage fait par Roughcut. Elle lit la transcription, classe chaque moment (un lieu, une personne, un chiffre, une actualité, une idée) et cherche d'abord des visuels sous licence libre : Wikimedia Commons, captures de pages officielles, graphiques rendus en local avec Hyperframes. Elle montre ensuite une planche contact où chaque candidat porte sa licence, et un extrait YouTube pris sur la chaîne de quelqu'un d'autre y est marqué comme risque de réclamation. Rien n'est posé avant votre choix. Les plans retenus deviennent des clips connectés dans un nouveau FCPXML, chacun calé juste après le mot qu'il illustre. Le projet est construit par le `make_fcpxml.py` de Roughcut, sans toucher au `edl.json` du montage, et un `CREDITS.txt` donne les crédits à mettre dans la description de la vidéo.
+
+Le module est expérimental : il n'a encore servi sur aucun vrai montage. Par défaut, il est désactivé. Ni l'app ni les scripts ne l'appellent, et Claude Code ne le voit qu'une fois lié dans un dossier de skills :
+
+```bash
+mkdir -p .claude/skills && ln -s ../../modules/b-roll-finder .claude/skills/b-roll-finder   # pour ce clone seulement
+sh modules/b-roll-finder/setup.sh --check   # yt-dlp, ImageMagick, Node 22, Hyperframes, Chrome, un venv Python avec Pillow
+```
+
+Sans `--check`, `setup.sh` installe ce qui manque (avec Homebrew). Ensuite, il suffit de demander à Claude Code de trouver du B-roll pour un dossier de projet Roughcut. Au premier lancement, il pose quelques questions (le son des plans de coupe, le mouvement des images fixes, les crédits à l'écran, les couleurs de la marque, votre chaîne) et note les réponses dans `TASTE.md`, fourni vierge.
+
+Le module est adapté de [louisedesadeleer/b-roll-finder](https://github.com/louisedesadeleer/b-roll-finder), de Louise de Sadeleer, sous licence MIT ([sa licence](modules/b-roll-finder/LICENSE)). Il en reprend la méthode, les scripts de capture de page et de zoom sur les images fixes, et le profil d'exemple `TASTE.example.md`, qui est le sien. Les changements portent sur la transcription, qui vient de Roughcut, et sur la sortie, posée dans Final Cut Pro au lieu d'une vidéo rendue. Les licences libres passent en premier et s'affichent sur la planche, et Hyperframes remplace Remotion.
+
 ## Musique
 
 `music.py` donne le tempo et les temps forts de chaque morceau (librosa, ou celui de fcp-mcp-server via `uvx` quand librosa n'est pas installé ; en cache) et classe les morceaux d'un dossier pour un montage : assez longs d'abord, puis les plus proches de sa durée, puis un tempo dans la fourchette demandée. Le monteur choisit.
@@ -544,6 +559,7 @@ Pas besoin de rushs. Les tests couvrent :
 - **Transcriptions et sous-titres** : le minutage des sous-titres, la transcription (hésitations, mots inventés ou sans minutage), les langues d'un rush (chaque passage dans la sienne, coupé dans les pauses, avec un faux whisper-cli ; et avec le vrai, un rush en français avec une réponse en anglais dite par des voix de macOS), les coupes écrites à partir de plages de phrases, les noms de fichiers accentués, les fichiers de réglages.
 - **Son et image** : les gains et rôles des voix, les zooms sur les jump cuts (et leur aperçu, vérifié sur l'image : le visage reste en place et grossit de 12 %), l'événement de dérushage, le cadre qui suit un visage dans un aperçu vertical (vérifié sur l'image), les sous-titres animés (un événement par mot, rendus avec transparence : opaques pendant un mot, vides dans le silence).
 - **Plans de coupe et musique** : les plans de coupe posés là où le face caméra en parle, une piste plus haut quand deux se chevauchent, visibles dans l'aperçu alors que le face caméra reste audible, et leur catalogue ; la musique (l'enveloppe du ducking, les plans de coupe calés sur les temps, et un vrai mixage où la musique est 14 dB plus bas sous la parole).
+- **Le module de recherche de B-roll** : un mot retrouvé dans la transcription malgré ses accents et ses apostrophes, les licences retenues et les badges de la planche (avec Pillow), et un plan posé par les scripts de Roughcut dans un vrai FCPXML, juste après son mot. Un mot coupé au montage y est écarté et signalé, et le `edl.json` du montage reste intact.
 - **Choix de montage** : les scripts (la prise complète d'un paragraphe dit deux fois, une phrase jamais dite, l'hésitation écartée des coupes), les J-cuts et L-cuts (posés quand les deux côtés sont libres de parole, coupe droite sinon, et entendus dans l'aperçu avant la coupe d'image), le cerveau (Claude Code, un quota atteint qui passe la main à un serveur local, des clés OpenAI et Anthropic lues dans le trousseau face à de faux serveurs, le choix du premier lancement, une question restée sans réponse), la fusion en un seul événement, les fichiers de l'action rapide.
 - **Le montage automatique complet** de deux clips générés : un fichier, un événement daté, le montage, les Shorts et les rushs rangés, plusieurs Shorts tirés de moments différents ; une nouvelle version à partir de choix modifiés ; aucune réponse du cerveau. Il est aussi lancé sur un dossier sans vidéo, un rush sans son, un cache abîmé, deux montages des mêmes rushs en même temps, une annulation depuis l'app, et des sous-titres dans un dossier dont le nom contient une apostrophe, deux-points et une virgule.
 - **Avec Final Cut Pro installé** : des timelines qui utilisent toutes les options sont validées avec ses vraies DTD, dans chaque version.
@@ -559,4 +575,4 @@ Mesuré sur un MacBook Pro M4 Max avec large-v3-turbo : la transcription prend e
 
 ## Licence
 
-MIT, voir [LICENSE](LICENSE).
+MIT, voir [LICENSE](LICENSE). Le module de recherche de B-roll est adapté de [louisedesadeleer/b-roll-finder](https://github.com/louisedesadeleer/b-roll-finder), sous licence MIT, copyright (c) 2026 Louise de Sadeleer : voir [modules/b-roll-finder/LICENSE](modules/b-roll-finder/LICENSE).

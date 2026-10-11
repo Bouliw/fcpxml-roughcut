@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"value","type":"number","label":"Number","default":42},
+  {"id":"decimals","type":"number","label":"Decimals","default":0},
+  {"id":"locale","type":"string","label":"Number format (locale)","default":"en-US"},
+  {"id":"prefix","type":"string","label":"Before the number","default":""},
+  {"id":"suffix","type":"string","label":"After the number","default":"%"},
+  {"id":"label","type":"string","label":"Label","default":"label"},
+  {"id":"source","type":"string","label":"Source (small, at the bottom)","default":""},
+  {"id":"bg","type":"color","label":"Background","default":"#0b0f17"},
+  {"id":"fg","type":"color","label":"Text","default":"#f4f4f5"},
+  {"id":"accent","type":"color","label":"Accent","default":"#a5b4fc"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <!-- Local copy (new_graphic.sh fetches it from npm): renders work offline and never change under you -->
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; }
+      #root { width: 100%; height: 100%; position: relative; font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", sans-serif; }
+      #card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      #num { font-size: 220px; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+      #label { font-size: 56px; font-weight: 500; margin-top: 12px; max-width: 1500px; text-align: center; }
+      #source { position: absolute; bottom: 48px; right: 64px; font-size: 26px; opacity: 0.6; }
+    </style>
+  </head>
+  <body>
+    <!-- 6 s rendered; the placement only uses what the beat needs -->
+    <div id="root" data-composition-id="main" data-start="0" data-duration="6" data-width="1920" data-height="1080">
+      <div id="card">
+        <div id="num"></div>
+        <div id="label"></div>
+        <div id="source"></div>
+      </div>
+    </div>
+    <script>
+      const v = window.__hyperframes.getVariables();
+      const root = document.getElementById("root");
+      root.style.background = v.bg;
+      document.getElementById("num").style.color = v.fg;
+      document.getElementById("label").style.color = v.accent;
+      document.getElementById("source").style.color = v.fg;
+      document.getElementById("label").textContent = v.label;
+      document.getElementById("source").textContent = v.source;
+      const fmt = new Intl.NumberFormat(v.locale, { minimumFractionDigits: v.decimals, maximumFractionDigits: v.decimals });
+      const num = document.getElementById("num");
+      const show = (x) => { num.textContent = v.prefix + fmt.format(x) + v.suffix; };
+      show(0);
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const counter = { x: 0 };
+      tl.fromTo("#card", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0);
+      tl.to(counter, { x: Number(v.value), duration: 1.4, ease: "power1.out", onUpdate: () => show(counter.x) }, 0.2);
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
