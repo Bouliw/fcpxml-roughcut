@@ -16,7 +16,7 @@ Usage: auto_edit.py footage_folder [--work-dir dir] [--music ask|none|auto|file]
 import argparse, datetime, errno, fcntl, json, os, re, shutil, signal, subprocess, sys, tempfile, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import brain, dressing, fcp, retakes, review, settings, timeline
+import brain, dressing, fcp, retakes, review, settings, takeline, timeline
 from timeline import disk_path, fd
 from words import VERSION as WORDS_VERSION, with_corrections
 
@@ -48,10 +48,10 @@ UI = {
            'listen_fixed': {'cut': 'hesitation cut after listening again', 'extend': 'word no longer cut', 'trim': 'scrap of a word removed',
                             'rejoin': 'hesitation put back: the words around its join were not heard whole'},
            'listen_kept': 'left as it is', 'listen_why': {}, 'listen_sep': ': ',
-           'retakes': {'title': 'Retakes called out loud (time in the edit; in brackets, in the clip).',
+           'retakes': {'title': 'Retakes called out loud or seen by Takeline (time in the edit; in brackets, in the clip).',
                        'cut': 'retake cut', 'left': 'left in', 'out': 'not in the edit',
                        'by': {'repeat': 'its start found in what the new take says again', 'silence': 'from the last clear silence',
-                              'call': 'only the phrase'},
+                              'call': 'only the phrase', 'takeline': 'the sentence started over in front of Takeline'},
                        'why_cut': {'brain': 'confirmed by the brain', 'repeat': 'the new take says its start again (no brain answered)'},
                        'why_left': {'brain': 'the brain sees it as part of what is told', 'reported': 'reported speech ("said", "that"...)',
                                     'no repeat': 'nothing said again after it, and no brain to decide'},
@@ -83,10 +83,10 @@ UI = {
            'listen_kept': 'laissé tel quel', 'listen_sep': ' : ',
            'listen_why': {'cutting it would leave a word alone': 'la couper laissait un mot seul',
                           'its join would jump in level or sound': 'son raccord sautait en volume ou en timbre'},
-           'retakes': {'title': 'Reprises signalées à voix haute (minutage dans le montage ; entre parenthèses, dans le rush).',
+           'retakes': {'title': 'Reprises signalées à voix haute ou vues par Takeline (minutage dans le montage ; entre parenthèses, dans le rush).',
                        'cut': 'reprise coupée', 'left': 'laissée', 'out': 'hors du montage',
                        'by': {'repeat': 'début trouvé dans ce que la reprise redit', 'silence': 'depuis le dernier silence net',
-                              'call': 'seulement la phrase'},
+                              'call': 'seulement la phrase', 'takeline': 'phrase reprise devant Takeline'},
                        'why_cut': {'brain': 'confirmée par le cerveau', 'repeat': 'la reprise redit son début (aucun cerveau n\'a répondu)'},
                        'why_left': {'brain': 'le cerveau y voit une partie de ce qui est raconté', 'reported': 'parole rapportée (« dit », « que »…)',
                                     'no repeat': 'rien de redit après, et aucun cerveau pour trancher'},
@@ -714,13 +714,18 @@ def main():
         run.event('step', name='analyze', state='end')
         run.event('step', name='choose', state='start')
         calls = []
-        if cuts['retakes']:  # the takes called failed out loud: candidates, for the brain to decide
+        if cuts['retakes']:  # the takes called failed out loud, or seen started over by Takeline: for the brain to decide
+            sessions = takeline.sessions(source, takeline.FOLDER)
             for rid, f in rushes.items():
                 p = timeline.transcript_path(tdir, f)
                 with open(p, encoding='utf-8') as fh:
-                    for c in retakes.find(with_corrections(p, json.load(fh)['words']), cuts['retake_phrases']):
-                        calls.append(dict(c, id=f'C{len(calls) + 1}', rush=rid, file=f))
-            run.say(f'retakes: {len(calls)} call(s) heard')
+                    ws = with_corrections(p, json.load(fh)['words'])
+                found = retakes.find(ws, cuts['retake_phrases'])
+                for session in sessions:
+                    found += [c for c in takeline.find(ws, session) if not takeline.overlaps(c, found)]
+                calls += [dict(c, id=f'C{len(calls) + n}', rush=rid, file=f) for n, c in enumerate(found, 1)]
+            run.say(f'retakes: {sum(c["by"] != "takeline" for c in calls)} call(s) heard, '
+                    f'{sum(c["by"] == "takeline" for c in calls)} seen by Takeline')
         count = shorts_count(cfg['auto']['short'])
         style = cfg['auto']['style']
         prompt = build_prompt(rushes, cache, catalogue, rejects, cuts['max_sentence_seconds'], count,
@@ -761,7 +766,7 @@ def main():
             d, note = without_brain(rushes, cache, durations, cuts['max_sentence_seconds'], cfg['auto']['short_skip_opening_seconds']), t['no_brain']
             decided = retakes.decide(calls, {})
         for c in decided:
-            run.say(f'retake {c["id"]}: {c["rush"]} {c["start"]:.2f} "{c["said"]}" '
+            run.say(f'retake {c["id"]}: {c["rush"]} {c["start"]:.2f} "{c["said"] or "started over"}" '
                     + (f'cut {c["from"]:.2f}-{c["to"]:.2f}' if c['cut'] else 'left in') + f' ({c["why"]}, {c["by"]})')
         spans = retakes.spans_of(decided)
         d['shorts'], changed = check_shorts(d, rushes, cache, cuts['max_sentence_seconds'], cfg['auto']['short_skip_opening_seconds'], count)
@@ -999,6 +1004,7 @@ def write_retakes(project, decided, t):
     lines, times = ([''] if os.path.exists(listen) else []) + [r['title']], []
     for c in decided:
         clip = f'{c["rush"]} {os.path.basename(c["file"])}'
+        c = dict(c, said=c['said'] or f'{c["repeat"]}…')  # a sentence Takeline saw started over: its first words
         if not c['cut']:
             lines.append(f'  —     « {c["said"]} » {r["left"]} ({clip} {mmss(c["start"])}){t["listen_sep"]}{r["why_left"][c["why"]]}')
             continue
