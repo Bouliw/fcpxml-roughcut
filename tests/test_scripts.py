@@ -55,6 +55,7 @@ import script_align  # noqa: E402
 import settings  # noqa: E402
 import splitedit  # noqa: E402
 import subtitles  # noqa: E402
+import takeline  # noqa: E402
 import text_edit  # noqa: E402
 import verify_edit  # noqa: E402
 import timeline  # noqa: E402
@@ -1434,6 +1435,51 @@ class RetakeTest(unittest.TestCase):
         self.assertIn('C2: R1, "je reprends." at 7.75-8.52; proposed cut 3.79-9.88 (nothing after it says again', section)
         self.assertIn('"retakes": [{"id": "C1", "retake": true', field)
         self.assertEqual(retakes.prompt([]), ('', ''))
+
+
+class TakelineTest(unittest.TestCase):
+    """The sentences the Takeline teleprompter saw started over: the failed take cut from the first start of the
+    sentence to the second, even with no call heard; never from a session the clip doesn't say."""
+    SCRIPT = ["Salut tout le monde.", "Aujourd'hui on va parler de Lisbonne et de sa cuisine.",
+              "On commence par le marché.", "Puis on finit au bord du fleuve."]
+
+    def session(self, redone=(1,), script=SCRIPT):
+        return {'format': 'takeline.session', 'version': 1, 'sentences': [{'id': n, 'page': 0, 'text': t} for n, t in enumerate(script)],
+                'retakes': [{'time': 10.0, 'sentence': n, 'trigger': 'reread'} for n in redone]}
+
+    def test_a_sentence_read_again_is_a_failed_take_without_any_call(self):
+        ws = speech('Salut tout le monde.', 0.5, "Aujourd'hui on va parler de Lisbonne et", 0.8,
+                    "Aujourd'hui on va parler de Lisbonne et de sa cuisine.", 0.5, 'On commence par le marché.', 0.5,
+                    'Puis on finit au bord du fleuve.')
+        self.assertEqual(retakes.find(ws, settings.load()['cuts']['retake_phrases']), [])  # nothing said out loud
+        [c] = takeline.find(ws, self.session())
+        self.assertEqual((c['by'], c['from'], c['to']), ('takeline', start_of(ws, "Aujourd'hui"), start_of(ws, "Aujourd'hui", 1)))
+        self.assertEqual(c['cut'], "Aujourd'hui on va parler de Lisbonne et")
+        self.assertIn('sentence started over at', retakes.prompt([dict(c, id='C1', rush='R1')])[0])
+        [d] = retakes.decide([dict(c, id='C1', file='a.mp4')], {})  # without the brain: the sentence said again is enough
+        self.assertEqual((d['cut'], d['why']), (True, 'repeat'))
+
+    def test_a_session_of_another_script_or_a_sentence_said_once_changes_nothing(self):
+        ws = speech('Salut tout le monde.', "Aujourd'hui on va parler de Lisbonne et de sa cuisine.", 'On commence par le marché.')
+        self.assertEqual(takeline.find(ws, self.session()), [])  # sentence 1 said once only
+        other = self.session(script=['Bonjour à toutes et à tous.', 'Voici la météo de demain matin.', 'Il fera beau partout.'])
+        self.assertEqual(takeline.find(speech('Bonjour à toutes et à tous.', 'Voici la météo', 'Voici la météo de demain matin.'), other), [])
+
+    def test_a_take_already_found_by_its_call_is_not_counted_twice(self):
+        ws = speech('Salut tout le monde.', "Aujourd'hui on va parler de", 0.4, 'je reprends.', 1.0,
+                    "Aujourd'hui on va parler de Lisbonne et de sa cuisine.", 'On commence par le marché.')
+        heard = retakes.find(ws, settings.load()['cuts']['retake_phrases'])
+        [c] = takeline.find(ws, self.session())
+        self.assertTrue(takeline.overlaps(c, heard))
+
+    def test_only_takeline_sessions_are_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name, content in (('a.takeline.json', json.dumps(self.session())), ('b.takeline.json', '{"format": "other"}'),
+                                  ('c.takeline.json', 'not json'), ('d.json', json.dumps(self.session()))):
+                with open(os.path.join(d, name), 'w', encoding='utf-8') as f:
+                    f.write(content)
+            self.assertEqual(len(takeline.sessions(d)), 1)
+
 
 
 @unittest.skipUnless(shutil.which('say') and shutil.which('ffmpeg') and importlib.util.find_spec('numpy')

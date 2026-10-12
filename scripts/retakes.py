@@ -124,8 +124,9 @@ def asked(found):
     """The candidates the brain is asked about: a reported call with nothing said again is never cut, so not asked."""
     return [c for c in found if c['repeat'] or not c['reported']]
 
-PROMPT = """The speaker may have called failed takes out loud. Each candidate below is such a call heard in a clip, with
-the cut it would make: from the first word of the failed take to the first word of the new take, the call included.
+PROMPT = """The speaker may have called failed takes out loud. Each candidate below is such a call heard in a clip, or a
+sentence the speaker's teleprompter (Takeline) saw them start over, with the cut it would make: from the first word of
+the failed take to the first word of the new take, the call included.
 Decide for each one: a retake (the speaker breaks off, says it to whoever edits, and starts again) or words that belong
 to what is told (a story, an interview, a quotation, a joke), which are never cut. When the failed take starts earlier
 or later than proposed, give its start in "from" (a line's start time). Leave the failed takes and the calls out of
@@ -141,11 +142,14 @@ def prompt(found):
     lines = []
     for c in found:
         how = (f'the new take says again "{c["repeat"]}", first said at {c["from"]:.2f}' if c['by'] == 'repeat'
+               else f'no call: the teleprompter saw the sentence started over, "{c["repeat"]}" said at {c["from"]:.2f} '
+                    f'and again at {c["to"]:.2f}' if c['by'] == 'takeline'
                else 'nothing after it says again what came before: the cut starts after the last clear pause' if c['by'] == 'silence'
                else 'nothing said just before it')
         cut = c.get('cut', '')
         cut = cut if len(cut) <= 200 else cut[:120] + ' … ' + cut[-60:]  # a long failed take: its start and its end
-        lines.append(f'{c["id"]}: {c["rush"]}, "{c["said"]}" at {c["start"]:.2f}-{c["end"]:.2f}; '
+        heard = f'"{c["said"]}" at {c["start"]:.2f}-{c["end"]:.2f}' if c['said'] else f'sentence started over at {c["start"]:.2f}'
+        lines.append(f'{c["id"]}: {c["rush"]}, {heard}; '
                      f'proposed cut {c["from"]:.2f}-{c["to"]:.2f}' + (f', "{cut}"' if cut else '') + f' ({how})')
     return PROMPT.format(lines='\n'.join(lines)), FIELD
 
