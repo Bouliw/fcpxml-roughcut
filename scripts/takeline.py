@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from retakes import bare
 
 FOLDER = os.path.expanduser('~/Documents/Takeline')
-START = 3  # the words that start a sentence, looked for in the transcript
+HEAD = 6  # the first words of a sentence, looked for in the transcript
 MATCH = 3  # sentences of a session a clip must say for the session to apply to it
 REACH = 60.0  # a failed take starts at most this long before the new one
 
@@ -30,21 +30,38 @@ def sessions(*folders):
                 out.append(s)
     return out
 
-def _start(text):
-    return tuple(t for t in (bare(w) for w in str(text).split()) if t)[:START]
+def _head(text):
+    return tuple(t for t in (bare(w) for w in str(text).split()) if t)[:HEAD]
 
-def _at(toks, key):
-    """Where the words of `key` start in the clip."""
-    return [i for i in range(len(toks) - len(key) + 1) if all(toks[i + j][1] == k for j, k in enumerate(key))]
+def _common(a, b):
+    """How many words of a are found in b, in the same order."""
+    row = [0] * (len(b) + 1)
+    for x in a:
+        prev = 0
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], prev + 1 if x == y else max(row[j], row[j - 1])
+    return row[-1]
+
+def _at(toks, head):
+    """Where the sentence starts in the clip: on its first or second word, with at least half of its first words
+    following in order (a word misheard, left out or added does not hide it, as the speaker rarely says a sentence
+    exactly as written). A start seen on its first word then on its second is one."""
+    need = max(3, (len(head) + 1) // 2)
+    out = []
+    for i in range(len(toks)):
+        if toks[i][1] in head[:2] and (not out or i - out[-1] > 1) \
+                and _common(head, [t for _, t in toks[i:i + len(head) + 2]]) >= need:
+            out.append(i)
+    return out
 
 def find(words, session):
     """The failed takes of a clip, shaped like retakes.find()'s candidates ('by' is 'takeline', 'start' and 'end' the
     moment the sentence starts over, 'repeat' the words said again), or none when the clip doesn't say the session."""
     toks = [(w, bare(w['w'])) for w in words if not (w.get('filler') or w.get('suspect') or w.get('removed'))]
     toks = [(w, t) for w, t in toks if t]
-    keys = [_start(s.get('text', '')) if isinstance(s, dict) else () for s in session.get('sentences') or []]
+    keys = [_head(s.get('text', '')) if isinstance(s, dict) else () for s in session.get('sentences') or []]
     # a start shared by two sentences of the script tells nothing
-    unique = {k for k in keys if len(k) == START and keys.count(k) == 1}
+    unique = {k for k in keys if len(k) >= 3 and keys.count(k) == 1}
     if sum(1 for k in unique if _at(toks, k)) < MATCH:
         return []
     redone = {}
@@ -62,7 +79,7 @@ def find(words, session):
                 continue
             out.append({'start': round(again['start'], 3), 'end': round(again['start'], 3), 'said': '',
                         'from': round(first['start'], 3), 'to': round(again['start'], 3), 'by': 'takeline',
-                        'repeat': ' '.join(toks[b + i][0]['w'] for i in range(START)), 'reported': False,
+                        'repeat': ' '.join(w['w'] for w, _ in toks[b:b + 4]), 'reported': False,
                         'cut': ' '.join(w['w'] for w, _ in toks if first['start'] <= w['start'] < again['start'])})
     return out
 

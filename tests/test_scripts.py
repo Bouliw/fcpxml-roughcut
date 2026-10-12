@@ -1459,6 +1459,12 @@ class TakelineTest(unittest.TestCase):
         [d] = retakes.decide([dict(c, id='C1', file='a.mp4')], {})  # without the brain: the sentence said again is enough
         self.assertEqual((d['cut'], d['why']), (True, 'repeat'))
 
+    def test_a_sentence_not_said_word_for_word_is_still_found(self):
+        ws = speech('Salut tout le monde.', 0.5, "Aujourd'hui on parle de Lisbonne et", 0.8,  # "va" left out
+                    "Aujourd'hui on va parler de Lisbonne et de sa cuisine.", 0.5, 'On commence par le marché.')
+        [c] = takeline.find(ws, self.session())
+        self.assertEqual((c['from'], c['to']), (start_of(ws, "Aujourd'hui"), start_of(ws, "Aujourd'hui", 1)))
+
     def test_a_session_of_another_script_or_a_sentence_said_once_changes_nothing(self):
         ws = speech('Salut tout le monde.', "Aujourd'hui on va parler de Lisbonne et de sa cuisine.", 'On commence par le marché.')
         self.assertEqual(takeline.find(ws, self.session()), [])  # sentence 1 said once only
