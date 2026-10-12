@@ -170,6 +170,30 @@
           }
         },
         {
+          "key": "cuts.retakes",
+          "type": "bool",
+          "label": {
+            "en": "Cut the takes called failed out loud",
+            "fr": "Couper les prises ratées signalées à voix haute"
+          },
+          "help": {
+            "en": "Experimental. \"Let me start over\", \"take two\", \"on la refait\"...: the failed take and the phrase go, the take after it stays. The brain checks each one against the whole transcript; never cut when the phrase is part of what is told (a story, an interview, a quotation). Listed with their times at the end of the edit and in to-listen.txt, marked in Final Cut Pro.",
+            "fr": "Expérimental. « On la refait », « je reprends », « take two »… : la prise ratée et la phrase partent, la prise suivante reste. Le cerveau vérifie chaque cas avec toute la transcription ; jamais coupé quand la phrase fait partie de ce qui est raconté (récit, interview, citation). Listées avec leur minutage en fin de montage et dans to-listen.txt, marquées dans Final Cut Pro."
+          }
+        },
+        {
+          "key": "cuts.retake_phrases",
+          "type": "list",
+          "label": {
+            "en": "Phrases that call a retake",
+            "fr": "Phrases qui signalent une reprise"
+          },
+          "help": {
+            "en": "Separated by commas; capitals and punctuation do not count, hesitations in between are skipped.",
+            "fr": "Séparées par des virgules ; majuscules et ponctuation ne comptent pas, les hésitations au milieu sont ignorées."
+          }
+        },
+        {
           "key": "cuts.silence_reach_seconds",
           "type": "number",
           "min": 0.1,

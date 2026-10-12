@@ -16,7 +16,7 @@ Usage: auto_edit.py footage_folder [--work-dir dir] [--music ask|none|auto|file]
 import argparse, datetime, errno, fcntl, json, os, re, shutil, signal, subprocess, sys, tempfile, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import brain, dressing, fcp, review, settings, timeline
+import brain, dressing, fcp, retakes, review, settings, timeline
 from timeline import disk_path, fd
 from words import VERSION as WORDS_VERSION, with_corrections
 
@@ -47,7 +47,16 @@ UI = {
            'listen_left': 'hesitation left in (cutting it broke the sentence, or its join failed the checks)',
            'listen_fixed': {'cut': 'hesitation cut after listening again', 'extend': 'word no longer cut', 'trim': 'scrap of a word removed',
                             'rejoin': 'hesitation put back: the words around its join were not heard whole'},
-           'listen_kept': 'left as it is', 'listen_why': {}, 'listen_sep': ': '},
+           'listen_kept': 'left as it is', 'listen_why': {}, 'listen_sep': ': ',
+           'retakes': {'title': 'Retakes called out loud (time in the edit; in brackets, in the clip).',
+                       'cut': 'retake cut', 'left': 'left in', 'out': 'not in the edit',
+                       'by': {'repeat': 'its start found in what the new take says again', 'silence': 'from the last clear silence',
+                              'call': 'only the phrase'},
+                       'why_cut': {'brain': 'confirmed by the brain', 'repeat': 'the new take says its start again (no brain answered)'},
+                       'why_left': {'brain': 'the brain sees it as part of what is told', 'reported': 'reported speech ("said", "that"...)',
+                                    'no repeat': 'nothing said again after it, and no brain to decide'},
+                       'summary': '{n} retake(s) cut ({times})', 'summary_none': 'No retake cut', 'summary_left': '{n} left in',
+                       'marker': 'Retake cut: "{said}"'}},
     'fr': {'start': 'Montage de {name} lancé : {n} rushs, {dur}. Notification quand c\'est prêt.',
            'music_q': 'Quelle musique pour « {name} » ?', 'music_pick': 'Laisser Roughcut choisir', 'music_none': 'Pas de musique',
            'music_folder_q': 'Choisissez votre dossier de musiques libres de droits (demandé une seule fois).',
@@ -73,7 +82,16 @@ UI = {
                             'rejoin': 'hésitation remise : les mots autour de son raccord ne s\'entendaient pas en entier'},
            'listen_kept': 'laissé tel quel', 'listen_sep': ' : ',
            'listen_why': {'cutting it would leave a word alone': 'la couper laissait un mot seul',
-                          'its join would jump in level or sound': 'son raccord sautait en volume ou en timbre'}},
+                          'its join would jump in level or sound': 'son raccord sautait en volume ou en timbre'},
+           'retakes': {'title': 'Reprises signalées à voix haute (minutage dans le montage ; entre parenthèses, dans le rush).',
+                       'cut': 'reprise coupée', 'left': 'laissée', 'out': 'hors du montage',
+                       'by': {'repeat': 'début trouvé dans ce que la reprise redit', 'silence': 'depuis le dernier silence net',
+                              'call': 'seulement la phrase'},
+                       'why_cut': {'brain': 'confirmée par le cerveau', 'repeat': 'la reprise redit son début (aucun cerveau n\'a répondu)'},
+                       'why_left': {'brain': 'le cerveau y voit une partie de ce qui est raconté', 'reported': 'parole rapportée (« dit », « que »…)',
+                                    'no repeat': 'rien de redit après, et aucun cerveau pour trancher'},
+                       'summary': '{n} reprise(s) coupée(s) ({times})', 'summary_none': 'Aucune reprise coupée', 'summary_left': '{n} laissée(s)',
+                       'marker': 'Reprise coupée : « {said} »'}},
 }
 
 class Plain(Exception):
@@ -214,7 +232,7 @@ The clips are named R1, R2... Every line is a sentence or part of one, with its 
 [start-end] text. Words in [brackets] are hesitations and words said twice: they are cut out anyway.
 {cut}
 Ranges are in seconds of a clip; copy line start and end times exactly, a range can span consecutive lines.
-{rejects}
+{rejects}{retakes}
 Return:
 {{
   "hook": {{"rush": "R1", "from": 0.0, "to": 0.0}},     // 5-15 s played first and NOT repeated in "main": the most
@@ -229,7 +247,7 @@ Return:
   "interviews": [{{"rush": "R1", "at": 0.0, "who": "who, in a few words"}}],  // each person interviewed: the clip and the
                                                         // time where they start answering the first question (a
                                                         // lower third is placed there); [] if none
-{shorts}
+{shorts}{retakes_field}
   "title_choices": ["", "", ""],
   "description": "2 to 4 sentences",
   "tags": ["10 to 15 tags"]
@@ -294,9 +312,10 @@ IRL = """  "irl": [{{"shot": "B001", "note": "what it shows"}}],  // shots from 
 NO_IRL = '  "irl": [],'
 IRL_SECONDS = 4.0  # an IRL moment: this long, around the best-looking moment of its shot
 
-def build_prompt(rushes, cache, catalogue, rejects, max_seconds=12.0, shorts=1, cut='normal', irl=False):
+def build_prompt(rushes, cache, catalogue, rejects, max_seconds=12.0, shorts=1, cut='normal', irl=False, calls=()):
     """`shorts`: how many Shorts to ask for at most; one per 2.5 minutes of speech, so a short video is not cut into
-    Shorts that cover all of it."""
+    Shorts that cover all of it. `calls`: the retakes called out loud for the brain to decide (retakes.py)."""
+    section, field = retakes.prompt(calls)
     clips, speech = [], 0.0
     for rid, path in rushes.items():
         sents = load_sentences(cache, path, max_seconds)
@@ -308,8 +327,8 @@ def build_prompt(rushes, cache, catalogue, rejects, max_seconds=12.0, shorts=1, 
     bad = [f'{rid} {r["from"]}-{r["to"]} s ({", ".join(r["why"])})' for rid, rs in rejects.items() for r in rs]
     shots = [f'{s["id"]}: {s["rush"]} {s["from"]}-{s["to"]} s, {", ".join(s["labels"]) or "no label"}' for s in catalogue]
     return PROMPT.format(
-        rejects=('Avoid these unusable stretches: ' + '; '.join(bad) + '\n') if bad else '',
-        shorts=SHORTS.format(n=n, s='s' if n > 1 else '') if shorts else NO_SHORT,
+        rejects=('Avoid these unusable stretches: ' + '; '.join(bad) + '\n') if bad else '', retakes=section,
+        shorts=SHORTS.format(n=n, s='s' if n > 1 else '') if shorts else NO_SHORT, retakes_field=field,
         cut=CUT.get(cut, CUT['normal']).format(speech=minutes(speech), target=minutes(speech * KEEP.get(cut, 0.5))),
         irl=IRL.format(n=max(3, min(len(catalogue), round(speech * KEEP.get(cut, 0.5) / 40)))) if irl and catalogue else NO_IRL,
         clips='\n\n'.join(clips),
@@ -694,13 +713,21 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_UN)
         run.event('step', name='analyze', state='end')
         run.event('step', name='choose', state='start')
+        calls = []
+        if cuts['retakes']:  # the takes called failed out loud: candidates, for the brain to decide
+            for rid, f in rushes.items():
+                p = timeline.transcript_path(tdir, f)
+                with open(p, encoding='utf-8') as fh:
+                    for c in retakes.find(with_corrections(p, json.load(fh)['words']), cuts['retake_phrases']):
+                        calls.append(dict(c, id=f'C{len(calls) + 1}', rush=rid, file=f))
+            run.say(f'retakes: {len(calls)} call(s) heard')
         count = shorts_count(cfg['auto']['short'])
         style = cfg['auto']['style']
         prompt = build_prompt(rushes, cache, catalogue, rejects, cuts['max_sentence_seconds'], count,
-                              cfg['auto']['cut'] or STYLE_CUT.get(style, 'light'), irl=style == 'vlog')
+                              cfg['auto']['cut'] or STYLE_CUT.get(style, 'light'), irl=style == 'vlog', calls=retakes.asked(calls))
         with open(os.path.join(project, 'brain-prompt.txt'), 'w', encoding='utf-8') as f:
             f.write(prompt)
-        note = None
+        note, answer = None, {}
         try:
             if args.decisions:
                 with open(args.decisions, encoding='utf-8') as f:
@@ -710,6 +737,10 @@ def main():
             with open(os.path.join(project, 'brain-answer.json'), 'w', encoding='utf-8') as f:
                 json.dump(answer, f, ensure_ascii=False, indent=1)
             d = clean(answer, rushes, durations)
+            decided = retakes.decide(calls, retakes.verdicts(answer, calls))
+            if calls and isinstance(answer, dict):  # kept with the choices: a new version from them makes the same cuts
+                answer['retakes'] = [dict({k: c[k] for k in ('id', 'rush', 'said', 'from', 'to')}, at=c['start'], retake=c['cut'])
+                                     for c in decided if c['why'] != 'reported']
             older = os.path.join(os.path.dirname(os.path.abspath(args.decisions)), 'broll.json') if args.decisions else None
             if older and os.path.exists(older) and not os.path.samefile(older, os.path.join(project, 'broll.json')):
                 with open(older, encoding='utf-8') as f:
@@ -728,6 +759,11 @@ def main():
         except brain.BrainError as e:
             run.say(f'brain: none ({e})')
             d, note = without_brain(rushes, cache, durations, cuts['max_sentence_seconds'], cfg['auto']['short_skip_opening_seconds']), t['no_brain']
+            decided = retakes.decide(calls, {})
+        for c in decided:
+            run.say(f'retake {c["id"]}: {c["rush"]} {c["start"]:.2f} "{c["said"]}" '
+                    + (f'cut {c["from"]:.2f}-{c["to"]:.2f}' if c['cut'] else 'left in') + f' ({c["why"]}, {c["by"]})')
+        spans = retakes.spans_of(decided)
         d['shorts'], changed = check_shorts(d, rushes, cache, cuts['max_sentence_seconds'], cfg['auto']['short_skip_opening_seconds'], count)
         for why in changed:
             run.say(f'short: one chosen took from the opening of the video; built instead from {why}')
@@ -736,6 +772,7 @@ def main():
         ranges = ([dict(d['hook'], note='hook')] if d['hook'] else []) + d['main']
         ranges = [{k: v for k, v in dict(r, file=rushes[r['rush']]).items() if k != 'rush'} for r in ranges]
         ranges = with_irl(ranges, d.get('irl', []), {f: i for i, f in enumerate(rushes.values())})
+        ranges = retakes.minus(ranges, spans)  # the failed takes out, before the edit is read again...
         given = answer.get('review') if note != t['no_brain'] and isinstance(answer, dict) else None
         if cfg['auto']['review'] and note != t['no_brain'] and (given is not None or not args.decisions):
             # choices given (--decisions) ask the brain nothing: their review is re-used, if they have one
@@ -745,7 +782,7 @@ def main():
             if d['review'] is not None:
                 with open(os.path.join(project, 'brain-answer.json'), 'w', encoding='utf-8') as f:
                     json.dump(dict(answer, broll=d['broll'], irl=d['irl'], review=d['review']), f, ensure_ascii=False, indent=1)
-        ranges = chapters_first(ranges, 'Introduction')
+        ranges = chapters_first(retakes.minus(ranges, spans), 'Introduction')  # ...and out of a line it put back
         run.event('step', name='choose', state='end')
         run.event('step', name='build', state='start')
         spec = dict(cut_spec(cuts), project=f'{name} – {stamp}', ranges=ranges)
@@ -770,8 +807,8 @@ def main():
                 os.symlink(target, os.path.join(sdir, link))
             title = f'{name} – Short – {stamp}' if len(d['shorts']) == 1 else f'{name} – Short {i} – {stamp}'
             with open(os.path.join(sdir, 'ranges.json'), 'w', encoding='utf-8') as f:
-                json.dump({**cut_spec(cuts), 'project': title, 'vertical': True, 'ranges': [
-                    {'file': rushes[r['rush']], 'from': r['from'], 'to': r['to']} for r in short]}, f, ensure_ascii=False, indent=1)
+                json.dump({**cut_spec(cuts), 'project': title, 'vertical': True, 'ranges': retakes.minus([
+                    {'file': rushes[r['rush']], 'from': r['from'], 'to': r['to']} for r in short], spans)}, f, ensure_ascii=False, indent=1)
             run.script('edl_from_ranges.py', os.path.join(sdir, 'ranges.json'), '-o', os.path.join(sdir, 'edl.json'))
             videos.append(sdir)
         # each video listened to once assembled: hesitations left, words cut at an edge, scraps of words (verify_edit.py)
@@ -784,6 +821,7 @@ def main():
                 except RuntimeError as e:
                     run.say(f'verify: none ({e})')
             write_listen(project, videos, t)
+        heard = write_retakes(project, decided, t) if calls else None  # with their times, once the cuts are final
         # the subtitles of every video, in two languages, and the words to check, marked in Final Cut Pro
         try:  # the edit is worth more than its subtitles: without them, it goes on
             run.script('subtitles.py', project)
@@ -851,13 +889,15 @@ def main():
         message = t['ready'].format(name=name, dur=mmss(length) + ('' if song else t['no_music']),
                                     short=(t['short'].format(dur=mmss(shorts_len[0])) if len(shorts_len) == 1 else
                                            t['shorts'].format(n=len(shorts_len), durs=', '.join(map(mmss, shorts_len))) if shorts_len else ''))
+        if heard:
+            message += f' {heard}.'
         if opened:  # the library question is only there when Final Cut Pro was opened
             message += t['asking'].format(lib=t['lib'].format(lib=lib) if lib else '')
         run.say(message + (f' ({note})' if note else ''))
         run.event('step', name='build', state='end')
         run.event('done', fcpxml=final, project=project, length=round(length, 2), shorts=[round(x, 2) for x in shorts_len],
                   library=lib or None, note=note, music=song and os.path.basename(song), no_music=music_note or None,
-                  message=message + (f' {note}.' if note else ''))
+                  retakes=heard, message=message + (f' {note}.' if note else ''))
         notify(title, message + (f' {note}.' if note else ''))
         print(final)
     except Cancelled:  # stopped from the app: nothing half-made is left
@@ -945,6 +985,38 @@ def write_listen(project, videos, t):
         lines.append('')
     with open(os.path.join(project, 'to-listen.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines).rstrip() + '\n')
+
+def write_retakes(project, decided, t):
+    """The retakes called out loud, at the end of to-listen.txt: each one cut with the time of its join in the edit
+    (where the new take starts) and of the failed take in its clip, and a to-do marker on the join in Final Cut Pro;
+    each one left in, and why. Returns the line for the end of the edit, e.g. "2 retakes cut (0:42, 3:10)"."""
+    r = t['retakes']
+    path = os.path.join(project, 'edl.json')
+    with open(path, encoding='utf-8') as f:
+        edl = json.load(f)
+    _, _, _, clips = timeline.build(path)
+    listen = os.path.join(project, 'to-listen.txt')
+    lines, times = ([''] if os.path.exists(listen) else []) + [r['title']], []
+    for c in decided:
+        clip = f'{c["rush"]} {os.path.basename(c["file"])}'
+        if not c['cut']:
+            lines.append(f'  —     « {c["said"]} » {r["left"]} ({clip} {mmss(c["start"])}){t["listen_sep"]}{r["why_left"][c["why"]]}')
+            continue
+        src = disk_path(os.path.abspath(c['file']))
+        at = next((x['off_s'] + max(0.0, c['to'] - x['in_s']) for x in clips
+                   if x['file'] == src and x['in_s'] - 0.4 <= c['to'] <= x['in_s'] + x['dur_s']), None)
+        if at is not None:
+            edl['markers'] = edl.get('markers', []) + [{'at': round(at, 2), 'text': r['marker'].format(said=c['said'])[:80], 'todo': True}]
+        times.append(mmss(at) if at is not None else f'{c["rush"]} {mmss(c["from"])}, {r["out"]}')
+        lines.append(f'  {mmss(at) if at is not None else "—   "}  {r["cut"]} ({clip} {mmss(c["from"])}–{mmss(c["to"])})   '
+                     f'« {c["said"]} »{t["listen_sep"]}{r["by"][c["by"]]}, {r["why_cut"][c["why"]]}')
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(edl, f, ensure_ascii=False, indent=1)
+    with open(listen, 'a', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    left = len(decided) - len(times)
+    said = r['summary'].format(n=len(times), times=', '.join(times)) if times else r['summary_none']
+    return said + (', ' + r['summary_left'].format(n=left) if left else '')
 
 def _said(edl, source, at):
     """The B-roll's moment is in the edit (its speech was kept)."""

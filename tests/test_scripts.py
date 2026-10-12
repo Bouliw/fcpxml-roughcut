@@ -48,6 +48,7 @@ import organize  # noqa: E402
 import pauses  # noqa: E402
 import probe as probe_script  # noqa: E402
 import reframe  # noqa: E402
+import retakes  # noqa: E402
 import review  # noqa: E402
 import render_preview  # noqa: E402
 import script_align  # noqa: E402
@@ -1295,6 +1296,219 @@ def said(text, start=0.0, step=0.3, gaps=None):
     return out
 
 
+def speech(*parts, start=0.0, step=0.3):
+    """Words of each part one after the other, `step` seconds each; a number between parts is a pause, in seconds."""
+    out, t = [], start
+    for p in parts:
+        if isinstance(p, (int, float)):
+            t += p
+            continue
+        out += said(p, start=t, step=step)
+        t = out[-1]['end']
+    return out
+
+
+def start_of(ws, word, nth=0):
+    """The start of the nth word written `word` (punctuation aside)."""
+    return [w['start'] for w in ws if w['w'].strip('.,:') == word][nth]
+
+
+class RetakeTest(unittest.TestCase):
+    """The takes called failed out loud: the failed take and the call cut, the new take kept; never a call that is part
+    of what is told."""
+    PHRASES = settings.load()['cuts']['retake_phrases']
+
+    def find(self, ws):
+        return retakes.find(ws, self.PHRASES)
+
+    def kept(self, ws, decided):
+        """The words an edit of the whole clip keeps once the retakes cut are out."""
+        pieces = retakes.minus([{'file': 'a.mp4', 'from': 0.0, 'to': ws[-1]['end'] + 1}], retakes.spans_of(decided))
+        return ' '.join(w['w'] for p in pieces for _, _, g in edl_from_ranges.cuts(ws, p['from'], p['to'], 0.5, 0.08, 0.12) for w in g)
+
+    def test_off_by_default_with_phrases_in_french_and_english(self):
+        cuts = settings.load()['cuts']
+        self.assertFalse(cuts['retakes'])
+        for p in ('on la refait', 'je reprends', 'attends non', 'take two', 'let me start over'):
+            self.assertIn(p, cuts['retake_phrases'])
+        self.assertEqual(retakes.phrases(['Attends, non', 'attends non', 'Let’s go']), [['attends', 'non'], ["let's", 'go']])
+
+    def test_the_new_take_gives_the_start_of_the_failed_one(self):
+        ws = speech('Salut tout le monde.', "Aujourd'hui on va parler de Lisbonne et de", 0.4, 'non attends, je reprends.', 1.2,
+                    "Aujourd'hui on va parler de Lisbonne et de sa cuisine.")
+        [c] = self.find(ws)
+        self.assertEqual((c['said'], c['by'], c['reported']), ('non attends, je reprends.', 'repeat', False))  # two phrases, one call
+        self.assertEqual((c['from'], c['to']), (start_of(ws, "Aujourd'hui"), start_of(ws, "Aujourd'hui", 1)))
+        self.assertTrue(c['repeat'].startswith("Aujourd'hui on va parler de Lisbonne"), c)
+        self.assertEqual(c['cut'], "Aujourd'hui on va parler de Lisbonne et de non attends, je reprends.")  # shown to the brain
+        self.assertIn('proposed cut 1.20-6.40, "Aujourd\'hui on va parler', retakes.prompt([dict(c, id='C1', rush='R1')])[0])
+        # only whole words on either side: the words just before the failed take, then the new take
+        self.assertEqual(self.kept(ws, retakes.decide([dict(c, file='a.mp4')], {})),
+                         "Salut tout le monde. Aujourd'hui on va parler de Lisbonne et de sa cuisine.")
+
+    def test_words_before_the_new_take_go_with_the_call(self):
+        ws = speech('The plan is to drive to Porto,', 0.5, 'no wait, let me start over.', 1.0, 'Okay. The plan is to fly to Porto.')
+        [c] = self.find(ws)
+        self.assertEqual((c['by'], c['from'], c['to']), ('repeat', start_of(ws, 'The'), start_of(ws, 'The', 1)))  # "Okay." cut too
+
+    def test_hesitations_and_punctuation_do_not_hide_a_call(self):
+        ws = speech('On y va.', 1.0, 'Attends, euh, non.', 1.0, 'On y va.')
+        [c] = self.find(ws)
+        self.assertEqual(c['said'], 'Attends, non.')
+
+    def test_without_a_new_take_alike_from_the_last_clear_silence(self):
+        ws = speech('Lisbon is lovely.', 1.0, 'The food there is amazing, and the,', 0.4, 'okay, take two.', 1.0,
+                    'Portuguese food is cheap if you know where to look.')
+        [c] = self.find(ws)
+        two = next(w for w in ws if w['w'] == 'two.')
+        self.assertEqual((c['by'], c['from'], c['to'], c['repeat']), ('silence', start_of(ws, 'The'), two['end'], ''))
+        # a call with nothing before it (a slate): only the call
+        [c] = self.find(speech('Take two.', 1.0, 'Hi everyone.'))
+        self.assertEqual((c['by'], c['from'], c['to']), ('call', 0.0, 0.6))
+
+    def test_two_common_words_far_back_are_no_failed_take(self):
+        ws = speech("C'est une ville que j'adore.", 0.5, ' '.join(['bla'] * 60) + '.', 1.0, 'Le musée, bon, je reprends.', 1.0,
+                    "C'est une visite incroyable.")
+        [c] = self.find(ws)
+        self.assertEqual((c['by'], c['from']), ('silence', start_of(ws, 'Le')))
+
+    def test_a_call_that_is_told_is_never_cut(self):
+        for text in ("Le premier jour, le guide nous a dit, on la refait demain, parce qu'il pleuvait.",
+                     "Il m'a dit : on la refait, et on a ri.",
+                     "When we missed the train, my friend said let's start over, and we did."):
+            [c] = self.find(speech(text))
+            self.assertTrue(c['reported'], text)
+            self.assertEqual(retakes.asked([c]), [])  # not even asked
+            [d] = retakes.decide([dict(c, id='C1')], {'C1': {'retake': True}})  # whatever the brain says
+            self.assertEqual((d['cut'], d['why']), (False, 'reported'))
+        quoted = [{'w': 'Bref.', 'start': 0.0, 'end': 0.3}, {'w': '« On', 'start': 1.0, 'end': 1.2},
+                  {'w': 'la', 'start': 1.2, 'end': 1.4}, {'w': 'refait »', 'start': 1.4, 'end': 1.7}]
+        self.assertTrue(self.find(quoted)[0]['reported'])
+
+    def test_without_the_brain_only_a_call_followed_by_a_repeat_is_cut(self):
+        found = [dict(c, id=f'C{n}', file='a.mp4') for n, c in enumerate(
+            self.find(speech("Aujourd'hui on part à", 0.4, 'je reprends.', 1.0, "Aujourd'hui on part à Porto."))
+            + self.find(speech("Allez, c'est reparti pour une nouvelle journée.")), 1)]
+        self.assertEqual([(d['cut'], d['why']) for d in retakes.decide(found, {})], [(True, 'repeat'), (False, 'no repeat')])
+
+    def test_the_brain_decides_and_may_move_the_start(self):
+        ws = speech('Salut.', 1.0, 'Alors le plan est simple:', 0.3, 'on part demain', 0.4, 'bon, on la refait.', 1.0, 'On part samedi.')
+        [c] = self.find(ws)
+        c = dict(c, id='C1', file='a.mp4')
+        self.assertEqual((c['by'], c['from']), ('repeat', start_of(ws, 'on')))
+        early = start_of(ws, 'Alors')
+        [d] = retakes.decide([c], {'C1': {'retake': True, 'from': early}})
+        self.assertEqual((d['cut'], d['why'], d['from'], d['to']), (True, 'brain', early, c['to']))
+        self.assertEqual(self.kept(ws, [d]), 'Salut. On part samedi.')
+        [d] = retakes.decide([c], {'C1': {'retake': True, 'from': early - 60, 'to': 'later'}})  # out of reach: as proposed
+        self.assertEqual((d['from'], d['to']), (c['from'], c['to']))
+        [d] = retakes.decide([c], {'C1': {'retake': False}})
+        self.assertEqual((d['cut'], d['why']), (False, 'brain'))
+
+    def test_choices_kept_with_a_version_find_their_call_again(self):
+        found = [{'id': 'C1', 'rush': 'R1', 'start': 12.0}, {'id': 'C2', 'rush': 'R2', 'start': 5.0}]
+        kept, by_id = {'id': 'C9', 'rush': 'R2', 'at': 5.2, 'retake': True}, {'id': 'C1', 'retake': False}
+        self.assertEqual(retakes.verdicts({'retakes': [kept, by_id, 'nonsense']}, found), {'C2': kept, 'C1': by_id})
+        self.assertEqual(retakes.verdicts({'retakes': 'none'}, found), {})
+        self.assertEqual(retakes.verdicts(None, found), {})
+
+    def test_the_failed_takes_out_of_every_range(self):
+        ranges = [{'file': 'a.mp4', 'from': 2.0, 'to': 30.0, 'chapter': 'Start', 'marker': 'm', 'note': 'hook'},
+                  {'file': 'b.mp4', 'from': 0.0, 'to': 5.0},
+                  {'file': 'a.mp4', 'from': 12.0, 'to': 18.0, 'chapter': 'Gone'},  # all of it failed
+                  {'file': 'a.mp4', 'from': 20.0, 'to': 25.0},  # the chapter of the range gone comes here
+                  {'file': 'a.mp4', 'from': 11.0, 'to': 15.0, 'whole': True}]  # no speech: as it is
+        out = retakes.minus(ranges, {'a.mp4': [(10.0, 20.0)]})
+        self.assertEqual([(r['file'], r['from'], r['to'], r.get('chapter'), r.get('marker'), r.get('note')) for r in out],
+                         [('a.mp4', 2.0, 10.0, 'Start', 'm', 'hook'), ('a.mp4', 20.0, 30.0, None, None, 'hook'),
+                          ('b.mp4', 0.0, 5.0, None, None, None), ('a.mp4', 20.0, 25.0, 'Gone', None, None),
+                          ('a.mp4', 11.0, 15.0, None, None, None)])
+        self.assertEqual(retakes.minus(ranges, {}), ranges)
+
+    def test_what_the_brain_reads(self):
+        c = {'id': 'C1', 'rush': 'R1', 'said': 'je reprends.', 'start': 7.75, 'end': 8.52, 'from': 3.79, 'to': 9.88,
+             'by': 'repeat', 'repeat': "Aujourd'hui on va", 'reported': False}
+        section, field = retakes.prompt([c, dict(c, id='C2', by='silence', repeat='')])
+        self.assertIn('C1: R1, "je reprends." at 7.75-8.52; proposed cut 3.79-9.88 (the new take says again '
+                      '"Aujourd\'hui on va", first said at 3.79)', section)
+        self.assertIn('C2: R1, "je reprends." at 7.75-8.52; proposed cut 3.79-9.88 (nothing after it says again', section)
+        self.assertIn('"retakes": [{"id": "C1", "retake": true', field)
+        self.assertEqual(retakes.prompt([]), ('', ''))
+
+
+@unittest.skipUnless(shutil.which('say') and shutil.which('ffmpeg') and importlib.util.find_spec('numpy')
+                     and (shutil.which('whisper-cli') or os.environ.get('WHISPER_CLI'))
+                     and os.path.exists(os.path.expanduser('~/.cache/whisper-cpp/ggml-large-v3-turbo.bin')),
+                     'needs say, whisper-cli and the large-v3-turbo model')
+class RetakeSpeechTest(unittest.TestCase):
+    """Retakes called out loud in speech made with say and transcribed by Whisper as an edit does (primed on the
+    hesitations, fitted to the sound), in French and in English: a call followed by the take said again, a call after a
+    take left unfinished, and a call that is part of a story."""
+    PHRASES, find, kept = RetakeTest.PHRASES, RetakeTest.find, RetakeTest.kept
+    SPEECH = {
+        'fr': ('Thomas', "Salut tout le monde, bienvenue sur la chaîne. [[slnc 900]] Aujourd'hui on va parler du voyage à Lisbonne "
+                         "et de, [[slnc 400]] non attends, je reprends. [[slnc 1200]] Aujourd'hui on va parler du voyage à Lisbonne et de "
+                         "tout ce qu'on a mangé là-bas. [[slnc 900]] C'est vraiment une ville incroyable, la nourriture est, [[slnc 500]] "
+                         "bon, on la refait. [[slnc 1000]] Lisbonne, c'est une ville où on mange très bien. [[slnc 900]] Le premier jour, "
+                         "le guide nous a dit : on la refait demain, parce qu'il pleuvait trop. [[slnc 900]] Et franchement, c'était la "
+                         "meilleure décision du séjour."),
+        'en': ('Samantha', "Hi everyone, welcome back to the channel. [[slnc 900]] Today I want to show you how I plan a trip to, "
+                           "[[slnc 400]] no wait, let me start over. [[slnc 1200]] Today I want to show you how I plan a trip to Japan on a "
+                           "budget. [[slnc 900]] The food there is amazing, and the, [[slnc 500]] okay, take two. [[slnc 1000]] Japanese "
+                           "food is cheap if you know where to look. [[slnc 900]] When we missed the train, my friend said let's start over, "
+                           "and we booked a new route. [[slnc 900]] Honestly, it was the best part of the trip.")}
+
+    def heard(self, lang):
+        voice, text = self.SPEECH[lang]
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        subprocess.run(['say', '-v', voice, '-o', os.path.join(d, 'clip.aiff'), text], check=True)
+        clip = os.path.join(d, 'clip.m4a')
+        subprocess.run(['ffmpeg', '-v', 'error', '-i', os.path.join(d, 'clip.aiff'), '-ar', '48000', clip], check=True)
+        r = subprocess.run(['bash', os.path.join(MediaTest.SCRIPTS, 'transcribe.sh'), clip, d, lang], capture_output=True, text=True,
+                           env=dict(os.environ, WHISPER_MODEL='ggml-large-v3-turbo.bin', ROUGHCUT_HESITATIONS='1'))
+        self.assertEqual(r.returncode, 0, r.stderr[-1000:])
+        r = subprocess.run([sys.executable, os.path.join(MediaTest.SCRIPTS, 'words.py'), os.path.join(d, 'clip.json'), '--audio', clip,
+                            '--hesitations'], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout[-1000:] + r.stderr[-1000:])
+        with open(os.path.join(d, 'clip.words.json')) as f:
+            ws = json.load(f)['words']
+        return ws, [dict(c, id=f'C{n}', file='a.mp4') for n, c in enumerate(self.find(ws), 1)]
+
+    def check(self, lang, call, unfinished, told, gone, stays):
+        """`unfinished`: the word ending the sentence before the take left unfinished, and a word of that take: the cut
+        starts between them (Whisper may time the first word of a sentence at the end of the one before)."""
+        ws, found = self.heard(lang)
+        text = ' '.join(w['w'] for w in ws)
+        self.assertEqual(len(found), 3, (text, found))
+        first, second, third = found
+        self.assertIn(call, first['said'])
+        self.assertEqual((first['by'], first['reported']), ('repeat', False), first)
+        self.assertEqual((second['by'], second['reported']), ('silence', False), second)
+        before, inside = (next(w for w in ws if w['w'].strip('.,…') == x) for x in unfinished)
+        self.assertTrue(before['end'] - 0.01 <= second['from'] <= inside['start'], (second, text))
+        self.assertTrue(third['reported'], third)
+        self.assertIn(told, third['said'])
+        # no brain: only the call followed by its take said again; the brain saying yes to all: the story stays
+        self.assertEqual([d['cut'] for d in retakes.decide(found, {})], [True, False, False])
+        kept = self.kept(ws, retakes.decide(found, {c['id']: {'retake': True} for c in found}))
+        for words_ in gone:
+            self.assertNotIn(words_, kept, kept)
+        for words_ in stays:
+            self.assertIn(words_, kept, kept)
+        return kept
+
+    def test_in_french(self):
+        kept = self.check('fr', 'reprends', ('là-bas', 'incroyable'), 'on la refait', gone=('reprends', 'la nourriture est', 'Bon, on la refait.'),
+                          stays=('bienvenue sur la chaîne.', 'Lisbonne, c\'est une ville où', 'nous a dit', 'on la refait demain'))
+        self.assertEqual(kept.count("Aujourd'hui on va parler du voyage à Lisbonne"), 1, kept)
+
+    def test_in_english(self):
+        kept = self.check('en', 'start over', ('budget', 'amazing'), "let's start over", gone=('No wait', 'The food there is amazing', 'take two'),
+                          stays=('welcome back to the channel.', 'Japanese food is cheap', "my friend said let's start over"))
+        self.assertEqual(kept.count('Today I want to show you how I plan a trip to'), 1, kept)
+
+
 class CutTest(unittest.TestCase):
     """Cutting inside what is kept: words said again, long sentences, pauses heard in the sound."""
     def marked(self, text):
@@ -1973,6 +2187,17 @@ class ShortChoiceTest(unittest.TestCase):
         self.assertIn('about 3 of them', vlog)
         talk = auto_edit.build_prompt(self.rushes, self.cache, shots, {}, 12, 3, 'normal', irl=False)
         self.assertIn('"irl": [],', talk)
+
+    def test_retakes_asked_only_when_one_was_heard(self):
+        plain = auto_edit.build_prompt(self.rushes, self.cache, [], {}, 12, 3)
+        self.assertNotIn('retake', plain)
+        call = {'id': 'C1', 'rush': 'R1', 'said': 'je reprends.', 'start': 7.75, 'end': 8.52, 'from': 3.79, 'to': 9.88,
+                'by': 'silence', 'repeat': '', 'reported': False}
+        asked = auto_edit.build_prompt(self.rushes, self.cache, [], {}, 12, 3, calls=[call])
+        section, field = retakes.prompt([call])
+        self.assertIn(section, asked)
+        self.assertIn(field + '\n  "title_choices"', asked)
+        self.assertEqual(asked.replace(section, '').replace(field, ''), plain)
 
     def test_irl_moments_in_the_order_of_the_day(self):
         order = {'A.mp4': 0, 'B.mp4': 1, 'C.mp4': 2}
@@ -2943,10 +3168,10 @@ class AutoEditTest(unittest.TestCase):
             with open(os.path.join(tdir, n + '.words.json'), 'w') as f:
                 json.dump({'words': words}, f)
 
-    def settings(self, srv, **auto):
+    def settings(self, srv, cuts=None, **auto):
         os.makedirs(self.work, exist_ok=True)
         with open(os.path.join(self.work, 'roughcut.json'), 'w') as f:
-            json.dump({'brain': {'engine': 'local', 'local_url': srv.url + '/v1', 'local_model': 'm'},
+            json.dump({'brain': {'engine': 'local', 'local_url': srv.url + '/v1', 'local_model': 'm'}, 'cuts': cuts or {},
                        'ui': {'language': 'fr'}, 'auto': dict({'library': 'Test'}, **auto)}, f)
 
     def command(self, *more):
@@ -3177,6 +3402,56 @@ class AutoEditTest(unittest.TestCase):
         final, out = self.run_edit(chat_reply('I cannot help with that.'))
         self.assertIn('aucun cerveau', out)
         self.assertEqual(len(list(ET.parse(final).getroot().iter('project'))), 2)  # the edit, and a Short from the densest stretch
+
+    def test_retakes_called_out_loud(self):
+        ws = speech('Hello and welcome to the channel.', 1.0, 'Today we walk to the', 0.4, 'no wait, let me start over.', 1.0,
+                    'Today we walk to the lake with my sister.', 1.0, 'On the way she said start again and laughed.', 1.0,
+                    'We tried the climb one more time and made it.', start=2.0)
+        with open(os.path.join(self.work, '.cache', 'Weekend trip', 'transcripts', 'C0001.words.json'), 'w') as f:
+            json.dump({'words': ws}, f)
+        failed, new = start_of(ws, 'Today'), start_of(ws, 'Today', 1)
+        decisions = {'hook': None, 'main': [{'rush': 'R1', 'from': 2.0, 'to': 25.0}], 'broll': [], 'shorts': [],
+                     'retakes': [{'id': 'C1', 'retake': True}, {'id': 'C3', 'retake': False}]}
+        srv = FakeServer(chat_reply(json.dumps(decisions)))
+        self.addCleanup(srv.close)
+        self.settings(srv, cuts={'retakes': True, 'verify': False})
+        env = dict(os.environ, ROUGHCUT_NO_NOTIFY='1')
+        r = subprocess.run(self.command('--progress'), capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout[-2000:] + r.stderr[-2000:])
+        asked = json.dumps(srv.seen[0][1], ensure_ascii=False)
+        self.assertIn('C1: R1, \\"no wait, let me start over.\\"', asked)
+        self.assertIn('C3: R1, \\"one more time\\"', asked)
+        self.assertNotIn('C2:', asked)  # "she said start again": told, never asked
+        done = json.loads([line for line in r.stdout.splitlines() if line.startswith('@done ')][-1][6:])
+        self.assertRegex(done['retakes'], r'^1 reprise\(s\) coupée\(s\) \(0:\d\d\), 2 laissée\(s\)$')
+        project = done['project']
+        with open(os.path.join(project, 'edl.json')) as f:
+            edl = json.load(f)
+        one = [c for c in edl['clips'] if c['file'].endswith('C0001.mp4')]
+        middles = [(w['start'] + w['end']) / 2 for w in ws if failed <= w['start'] < new]  # the failed take and the call
+        self.assertFalse([t for t in middles if any(c['in'] < t < c['out'] for c in one)], one)
+        self.assertTrue(any(c['in'] <= new + 0.1 <= c['out'] for c in one), one)  # the new take
+        self.assertIn({'text': 'Reprise coupée : « no wait, let me start over. »', 'todo': True},
+                      [{k: m[k] for k in ('text', 'todo')} for m in edl['markers']])
+        with open(os.path.join(project, 'to-listen.txt')) as f:
+            listen = f.read()
+        self.assertTrue(listen.startswith('Reprises signalées à voix haute'), listen)
+        self.assertIn('reprise coupée (R1 C0001.mp4 0:0', listen)
+        self.assertIn('« one more time » laissée (R1 C0001.mp4 0:', listen)
+        self.assertIn('le cerveau y voit une partie de ce qui est raconté', listen)
+        self.assertIn('« start again » laissée', listen)
+        self.assertIn('parole rapportée', listen)
+        with open(os.path.join(project, 'brain-answer.json')) as f:
+            kept = json.load(f)['retakes']
+        self.assertEqual([(k['id'], k['rush'], k['retake']) for k in kept], [('C1', 'R1', True), ('C3', 'R1', False)])
+        # a new version from these choices makes the same cuts, asking nothing
+        seen = len(srv.seen)
+        r = subprocess.run(self.command('--decisions', os.path.join(project, 'brain-answer.json')), capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout[-2000:] + r.stderr[-2000:])
+        self.assertFalse(any('editor of a YouTube' in json.dumps(b) for _, b, _ in srv.seen[seen:]))
+        with open(os.path.join(os.path.dirname(r.stdout.strip().splitlines()[-1]), 'ranges.json')) as f:
+            again = [x for x in json.load(f)['ranges'] if x['file'].endswith('C0001.mp4')]
+        self.assertFalse(any(x['from'] < new - 0.01 and x['to'] > failed + 0.01 for x in again), again)
 
 
 
