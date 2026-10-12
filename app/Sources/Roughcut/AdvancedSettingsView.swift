@@ -47,6 +47,27 @@ struct AdvancedSchema: Decodable {
     }
 }
 
+/// A list typed as text, separated by commas (or lines), saved when the field is left or Return pressed: read back at every key,
+/// the space or the comma just typed would be taken away ("on la refait, je reprends" could not be typed).
+struct ListField: View {
+    let text: String
+    let save: (String) -> Void
+    @State private var typed = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("", text: $typed, axis: .vertical)
+            .lineLimit(1...4)
+            .frame(width: 240)
+            .focused($focused)
+            .onAppear { typed = text }
+            .onChange(of: text) { _, now in if !focused { typed = now } }
+            .onChange(of: focused) { _, now in if !now { save(typed) } }
+            .onSubmit { save(typed) }
+            .onDisappear { if focused { save(typed) } }
+    }
+}
+
 struct AdvancedSettingsView: View {
     @EnvironmentObject var app: AppState
     @ObservedObject var downloads = AppState.shared.downloads
@@ -148,10 +169,10 @@ struct AdvancedSettingsView: View {
             TextField("", text: Binding(get: { (value(item) as? String) ?? "" }, set: { app.update(item.section, item.name, $0) }))
                 .frame(width: 180)
         case "list":
-            TextField("", text: Binding(get: { ((value(item) as? [String]) ?? []).joined(separator: ", ") }, set: {
-                app.update(item.section, item.name, $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
-            }))
-            .frame(width: 140)
+            ListField(text: ((value(item) as? [String]) ?? []).joined(separator: ", ")) {
+                app.update(item.section, item.name, $0.split(whereSeparator: { $0 == "," || $0.isNewline })
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+            }
         default:  // number, int
             let binding = Binding<Double>(get: { number(value(item)) }, set: { v in
                 let clamped = Swift.min(item.max ?? .infinity, Swift.max(item.min ?? -.infinity, v))
@@ -179,7 +200,8 @@ struct AdvancedSettingsView: View {
         case let s as String where item.type == "choice":
             return item.options?.first { $0.value == s }?.label.local ?? s
         case let s as String: return s.isEmpty ? L10n.t("adv.empty") : s
-        case let a as [Any]: return a.isEmpty ? L10n.t("adv.empty") : a.map { "\($0)" }.joined(separator: ", ")
+        case let a as [Any]:  // a long list (the retake phrases): its start and its length
+            return a.isEmpty ? L10n.t("adv.empty") : a.prefix(4).map { "\($0)" }.joined(separator: ", ") + (a.count > 4 ? "… (\(a.count))" : "")
         case let n as NSNumber: return n.stringValue + (item.unit.map { " " + $0 } ?? "")
         default: return "—"
         }
