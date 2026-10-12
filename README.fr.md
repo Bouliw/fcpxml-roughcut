@@ -439,6 +439,8 @@ Avec `cuts.retakes` (Réglages › Paramètres avancés › Coupes), une prise q
 
 La fin du montage dit combien de reprises ont été coupées et où dans le montage ; chaque coupe porte un marqueur à faire sur son raccord dans Final Cut Pro, et `to-listen.txt` liste chaque phrase entendue, coupée (avec son minutage dans le montage et dans le rush, et comment son début a été trouvé) ou laissée (et pourquoi). Les décisions sont gardées dans `brain-answer.json` (`"retakes"`) : passez-en une à `"retake": false` et faites une nouvelle version avec `--decisions` pour remettre cette prise. Testé sur de la parole faite avec `say` en français et en anglais et transcrite par Whisper, avec Claude comme cerveau ; pas encore sur de vrais rushs.
 
+Avec le prompteur [Takeline](https://github.com/Bouliw/takeline), une phrase que vous reprenez sans rien dire est coupée aussi. Takeline enregistre chaque lecture dans un fichier `.takeline.json` (dans `~/Documents/Takeline`, ou à côté des rushs) avec chaque phrase reprise. `takeline.py` retrouve chacune de ces phrases deux fois dans la transcription d'un rush qui dit au moins trois phrases de la séance, et la prise entre le premier début et le second passe par les mêmes vérifications qu'une reprise signalée à voix haute.
+
 ## Montage par le texte
 
 Une fois un montage fini, **Montage par le texte** (dans la fenêtre, ou la barre des menus pour un montage plus ancien) affiche la transcription de tous les rushs : les mots du montage en noir, les passages coupés en gris. Un clic sur un mot le retire (barré) ou remet un mot gris ; un clic sur l'heure d'une ligne agit sur toute la ligne. **Mettre à jour dans FCP** crée une nouvelle version du montage à partir des mots choisis (`text_edit.py`, puis `auto_edit.py --decisions`) : les coupes sur les silences, la réécoute, les sous-titres et les SRT sont refaits, sans rien demander au cerveau. Les retouches faites à la main dans Final Cut Pro ne sont pas reprises : le montage par le texte se fait avant la finition, comme la fenêtre le rappelle.
@@ -524,6 +526,7 @@ Dans l'app, les Réglages s'en tiennent à ce que tout le monde peut vouloir (le
 | `dressing.py` | L'habillage du montage principal : titres de chapitre, heure, bandeaux, fondus, avec les modèles de Final Cut Pro. |
 | `review.py` | Le montage relu comme par un spectateur, et ses corrections. |
 | `retakes.py` | Les prises signalées ratées à voix haute : les phrases trouvées, le début de chaque prise ratée, les décisions du cerveau, les coupes. |
+| `takeline.py` | Les phrases que le prompteur Takeline a vu reprendre, retrouvées deux fois dans la transcription. |
 | `hesitations.py` | Le son lu de près : voyelles tenues des hésitations, vrais silences où couper. |
 | `verify_edit.py` | Réécoute un montage assemblé, corrige les hésitations et les mots coupés, cale les mots sur son son. |
 | `text_edit.py` | Montage par le texte : la transcription avec ce que garde le montage, et une nouvelle version à partir des mots choisis. |

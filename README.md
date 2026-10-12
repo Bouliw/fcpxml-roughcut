@@ -439,6 +439,8 @@ With `cuts.retakes` (Settings › Advanced › Cuts), a take you call failed out
 
 The end of the edit says how many retakes were cut and where in the edit; each cut has a to-do marker on its join in Final Cut Pro, and `to-listen.txt` lists every phrase heard, cut (with its times in the edit and in the clip, and how its start was found) or left in (and why). The decisions are kept in `brain-answer.json` (`"retakes"`): set one to `"retake": false` and make a new version with `--decisions` to put that take back. Tested on speech made with `say` in French and in English and transcribed by Whisper, with Claude as the brain; not yet on real footage.
 
+With the [Takeline](https://github.com/Bouliw/takeline) teleprompter, a sentence you start over without saying anything is cut too. Takeline saves each reading in a `.takeline.json` file (in `~/Documents/Takeline`, or next to the footage) with every sentence started over. `takeline.py` finds each such sentence starting twice in the transcript of a clip that says at least three sentences of the session, and the take from the first start to the second goes through the same checks as a retake called out loud.
+
 ## Editing by the text
 
 Once an edit is done, **Edit by the text** (in the window, or the menu bar for an older edit) shows the transcript of all the footage: the words of the edit in black, the passages cut in grey. A click on a word takes it out (struck through) or puts a grey word back; a click on the time of a line does the whole line. **Update in Final Cut Pro** makes a new version of the edit from the words chosen (`text_edit.py`, then `auto_edit.py --decisions`): the cuts on silences, the listening, the captions and the subtitles are made again, and the brain is asked nothing. What was changed by hand in Final Cut Pro is not carried over: editing by the text comes before the finishing there, as the window says.
@@ -524,6 +526,7 @@ In the app, the Settings keep to what everyone may want (the brain, the music, t
 | `dressing.py` | The dressing of the main edit: chapter titles, time of day, lower thirds, dissolves, from Final Cut Pro's own templates. |
 | `review.py` | The edit read again as a viewer, and its fixes. |
 | `retakes.py` | The takes called failed out loud: the phrases found, where each failed take starts, the brain's decisions, the cuts. |
+| `takeline.py` | The sentences the Takeline teleprompter saw started over, found twice in the transcript. |
 | `hesitations.py` | The sound read closely: held vowels of hesitations, true silences to cut in. |
 | `verify_edit.py` | Listens to an assembled edit, fixes the hesitations and the words cut, times the words on its sound. |
 | `text_edit.py` | Editing by the text: the transcript with what the edit keeps, and a new version from the words chosen. |
