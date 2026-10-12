@@ -217,6 +217,10 @@ struct JobView: View {
                      + (r.noMusic != nil ? L10n.t("done.noMusic") : ""))
                     .foregroundStyle(.secondary)
                 if let note = r.note { Text(note).font(.callout).foregroundStyle(.orange).multilineTextAlignment(.center) }
+                if let retakes = r.retakes {  // the detail, and every time, in to-listen.txt
+                    Button(retakes) { NSWorkspace.shared.open(r.project.appendingPathComponent("to-listen.txt")) }
+                        .buttonStyle(.link).font(.callout).help(L10n.t("done.retakes"))
+                }
                 if app.finalCut != nil {
                     Button {
                         app.openInFinalCut(r.fcpxml)
