@@ -1098,7 +1098,9 @@ class BrainTest(unittest.TestCase):
         self.assertEqual((answer, engine), ({'ok': True}, 'api'))
         path, body, headers = api.seen[0]
         self.assertEqual((path.split('?')[0], body['model'], body['thinking']), ('/v1/messages', 'claude-opus-5', {'type': 'adaptive'}))
-        self.assertEqual(headers.get('x-api-key'), 'sk-ant-test')
+        # SDK 1.x sends the key as x-api-key, SDK 2.x as a bearer token.
+        sent = headers.get('x-api-key') or headers.get('authorization', '').removeprefix('Bearer ')
+        self.assertEqual(sent, 'sk-ant-test')
 
     def test_first_launch_choice_is_saved(self):
         with mock.patch.object(brain, 'dialog_choose', side_effect=lambda items, *a, **k: items[2] if len(items) == 3 else 'OpenAI'), \
