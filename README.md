@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
+  <img src="docs/banner-light.png" alt="fcpxml-roughcut" width="100%">
+</picture>
+
 # fcpxml-roughcut
 
 [![Tests](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml/badge.svg)](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml)
