@@ -61,6 +61,7 @@ class LicenceTest(unittest.TestCase):
                     'https://www.youtube.com./watch?v=abc', 'youtube.com/watch?v=abc&r=https://x.org',
                     # a YouTube link wrapped by an archive or a redirect is still a YouTube excerpt
                     'https://web.archive.org/web/2020/https://www.youtube.com/watch?v=abc',
+                    'https://web.archive.org/web/2020id_/www.youtube.com/watch?v=abc',
                     'https://www.google.com/url?q=https%3A%2F%2Fyoutu.be%2Fabc'):
             self.assertEqual(badge(url), 'CLAIM RISK', url)
         # Only mentioning YouTube in the address does not make a page a YouTube excerpt

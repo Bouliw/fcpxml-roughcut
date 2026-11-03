@@ -45,7 +45,8 @@ def youtube_host(url):
     text = unquote((url or '').strip())
     if not re.match(r'[a-z][a-z0-9+.-]*://', text, re.I):
         text = '//' + text
-    for authority in re.findall(r'//([^/?#&\s]+)', text):
+    # A Wayback path (/web/<date>/) wraps a link with or without its scheme
+    for authority in re.findall(r'(?://|/web/[^/]*/)([^/?#&\s]+)', text):
         host = authority.rsplit('@', 1)[-1].split(':')[0].rstrip('.').lower()
         if any(host == d or host.endswith('.' + d) for d in ('youtube.com', 'youtube-nocookie.com', 'youtu.be')):
             return True
