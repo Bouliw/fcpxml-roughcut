@@ -57,7 +57,11 @@ class LicenceTest(unittest.TestCase):
         def badge(url):
             return contact_sheet.badge({'source': 'a blog', 'licence': 'CC BY 4.0', 'url': url}, ['My Channel'])[0]
         for url in ('https://www.youtube-nocookie.com/embed/abc', 'https://m.youtube.com/watch?v=abc',
-                    'https://youtu.be/abc', 'HTTPS://WWW.YOUTUBE.COM/watch?v=abc', 'youtube.com/watch?v=abc'):
+                    'https://youtu.be/abc', 'HTTPS://WWW.YOUTUBE.COM/watch?v=abc', 'youtube.com/watch?v=abc',
+                    'https://www.youtube.com./watch?v=abc', 'youtube.com/watch?v=abc&r=https://x.org',
+                    # a YouTube link wrapped by an archive or a redirect is still a YouTube excerpt
+                    'https://web.archive.org/web/2020/https://www.youtube.com/watch?v=abc',
+                    'https://www.google.com/url?q=https%3A%2F%2Fyoutu.be%2Fabc'):
             self.assertEqual(badge(url), 'CLAIM RISK', url)
         # Only mentioning YouTube in the address does not make a page a YouTube excerpt
         for url in ('https://example.org/post?from=youtube.com', 'https://notyoutube.com/a', 'https://youtube.com.example.org/a', 'http://[bad'):

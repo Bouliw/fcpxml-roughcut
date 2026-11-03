@@ -13,7 +13,7 @@ candidates.json: {"title": "...", "own_channels": ["..."], "beats": [{"id": "b01
   {"key": "B", "file": "raw/yt.mp4", "source": "YouTube", "channel": "BBC News", "in": 12.0, "url": "..."}]}]}
 A file fetched by commons.py brings its licence, credit and restrictions from its .json sidecar."""
 import argparse, json, os, re, subprocess, sys, tempfile
-from urllib.parse import urlsplit
+from urllib.parse import unquote
 from PIL import Image, ImageDraw, ImageFont
 
 W, MARGIN, LEFT, TILE_W, TILE_H, GAP = 1920, 40, 470, 440, 248, 26
@@ -40,13 +40,16 @@ def lic_family(text):
     return None
 
 def youtube_host(url):
-    """Whether a link points at YouTube, told by its host (an address that only mentions YouTube does not count)."""
-    url = (url or '').strip()
-    try:
-        host = urlsplit(url if '://' in url else '//' + url).hostname or ''
-    except ValueError:  # malformed address, e.g. an unclosed [
-        return False
-    return host == 'youtu.be' or any(host == d or host.endswith('.' + d) for d in ('youtube.com', 'youtube-nocookie.com'))
+    """Whether a link points at YouTube, told by its host, or by the host of a link it wraps (web archive, redirect):
+    an address that only mentions YouTube in its text does not count."""
+    text = unquote((url or '').strip())
+    if not re.match(r'[a-z][a-z0-9+.-]*://', text, re.I):
+        text = '//' + text
+    for authority in re.findall(r'//([^/?#&\s]+)', text):
+        host = authority.rsplit('@', 1)[-1].split(':')[0].rstrip('.').lower()
+        if any(host == d or host.endswith('.' + d) for d in ('youtube.com', 'youtube-nocookie.com', 'youtu.be')):
+            return True
+    return False
 
 def badge(c, own):
     """(label, colour) of a candidate: the copyright risk the user takes by picking it."""
