@@ -13,6 +13,7 @@ candidates.json: {"title": "...", "own_channels": ["..."], "beats": [{"id": "b01
   {"key": "B", "file": "raw/yt.mp4", "source": "YouTube", "channel": "BBC News", "in": 12.0, "url": "..."}]}]}
 A file fetched by commons.py brings its licence, credit and restrictions from its .json sidecar."""
 import argparse, json, os, re, subprocess, sys, tempfile
+from urllib.parse import urlsplit
 from PIL import Image, ImageDraw, ImageFont
 
 W, MARGIN, LEFT, TILE_W, TILE_H, GAP = 1920, 40, 470, 440, 248, 26
@@ -38,11 +39,19 @@ def lic_family(text):
         return 'cc-by'
     return None
 
+def youtube_host(url):
+    """Whether a link points at YouTube, told by its host (an address that only mentions YouTube does not count)."""
+    url = (url or '').strip()
+    try:
+        host = urlsplit(url if '://' in url else '//' + url).hostname or ''
+    except ValueError:  # malformed address, e.g. an unclosed [
+        return False
+    return host == 'youtu.be' or any(host == d or host.endswith('.' + d) for d in ('youtube.com', 'youtube-nocookie.com'))
+
 def badge(c, own):
     """(label, colour) of a candidate: the copyright risk the user takes by picking it."""
     src, lic = (c.get('source') or '').lower(), c.get('licence') or ''
-    url = (c.get('url') or '').lower()
-    if 'youtube' in src or 'youtu.be' in url or 'youtube.com' in url:
+    if 'youtube' in src or youtube_host(c.get('url')):
         if (c.get('channel') or '').strip().lower() in {o.strip().lower() for o in own if o}:
             return 'Your channel', GREEN
         return 'CLAIM RISK', RED

@@ -51,6 +51,18 @@ class LicenceTest(unittest.TestCase):
         self.assertEqual(badge(source='Hyperframes', licence='own'), 'Own graphic')
         self.assertEqual(badge(source='a blog', licence='unknown'), 'Licence to check')  # "unknown" is not "own"
 
+    @unittest.skipUnless(importlib.util.find_spec('PIL'), 'needs Pillow')
+    def test_a_youtube_link_is_told_by_its_host(self):
+        import contact_sheet
+        def badge(url):
+            return contact_sheet.badge({'source': 'a blog', 'licence': 'CC BY 4.0', 'url': url}, ['My Channel'])[0]
+        for url in ('https://www.youtube-nocookie.com/embed/abc', 'https://m.youtube.com/watch?v=abc',
+                    'https://youtu.be/abc', 'HTTPS://WWW.YOUTUBE.COM/watch?v=abc', 'youtube.com/watch?v=abc'):
+            self.assertEqual(badge(url), 'CLAIM RISK', url)
+        # Only mentioning YouTube in the address does not make a page a YouTube excerpt
+        for url in ('https://example.org/post?from=youtube.com', 'https://notyoutube.com/a', 'https://youtube.com.example.org/a', 'http://[bad'):
+            self.assertEqual(badge(url), 'Free · credit required', url)
+
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'needs ffmpeg')
 class PlaceTest(unittest.TestCase):
