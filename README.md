@@ -593,6 +593,19 @@ GitHub Actions runs them on every push, with Python 3.9 and 3.13, and builds the
 
 Measured on a MacBook Pro M4 Max with large-v3-turbo: transcription takes about 3.3 s per minute of footage (4.6 s when two languages alternate), and the look at the footage runs at the same time (about 8 s per minute of 4K 60 fps HEVC, 3.3 s per minute of 720p). The frames stay on the GPU until the few that are looked at are picked: 40 % faster on 4K than bringing every frame to the CPU, with the same pixels, so the same measurements. With Claude Code as the brain, the cuts are chosen in 40 to 70 s, whether the footage lasts two minutes or an hour, and the project is built in a few seconds. 2.5 minutes of 4K footage take 32 s; a new version of the same footage, 6 to 9 s, as transcripts and measurements are kept. An hour of footage peaks at 400 MB of memory beside Whisper (about 2.5 GB with large-v3-turbo).
 
+## More tools by Bouliw
+
+- [Vigie](https://github.com/Bouliw/vigie): Sigma detection on Windows, Linux and macOS logs, with a report mapped to MITRE ATT&CK.
+- [Earshot](https://github.com/Bouliw/earshot): Live, on-device transcription of any app on your Mac, with speaker names.
+- [doc-indexer-macos](https://github.com/Bouliw/doc-indexer-macos): On-device OCR for a folder of paperwork, ready for grep or an AI agent.
+- [Lantern](https://github.com/Bouliw/lantern): A stylish Jellyfin client for desktop, LG webOS TVs and phones.
+- [Boulito](https://github.com/Bouliw/boulito): A voice assistant that runs 100% on your Mac.
+- [trackmend](https://github.com/Bouliw/trackmend): Repairs a macOS Music library full of local files.
+- [Takeline](https://github.com/Bouliw/takeline): A teleprompter that follows your voice, entirely on your Mac.
+- [mac-toolkit](https://github.com/Bouliw/mac-toolkit): Small tools I use every day on my Mac.
+
+All projects: [bouliw.github.io](https://bouliw.github.io)
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The B-roll finder module is adapted from [louisedesadeleer/b-roll-finder](https://github.com/louisedesadeleer/b-roll-finder), MIT, copyright (c) 2026 Louise de Sadeleer: see [modules/b-roll-finder/LICENSE](modules/b-roll-finder/LICENSE).
