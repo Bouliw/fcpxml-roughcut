@@ -58,7 +58,9 @@ def ask_claude(prompt, b, images=()):
         raise BrainError('Claude Code (claude) is not installed')
     cmd = [exe, '-p', '--output-format', 'json', '--no-session-persistence', '--strict-mcp-config']
     if images:
-        cmd += ['--tools', 'Read', '--allowedTools', 'Read', '--add-dir', os.path.dirname(os.path.abspath(images[0]))]
+        # nothing but these pictures' folder can be read, whatever the footage or the transcript tells the model
+        folder = os.path.realpath(os.path.dirname(images[0]))
+        cmd += ['--tools', 'Read', '--allowedTools', f'Read(/{folder}/**)', '--permission-mode', 'dontAsk']
         prompt = 'First look at each of these pictures, with the Read tool:\n' + '\n'.join(images) + '\n\n' + prompt
     else:
         cmd += ['--tools', '']
@@ -177,17 +179,16 @@ def ask(prompt, cfg, images=()):
     """(answer, engine that answered, note for the user or None). The configured engine first; when claude does not
     answer, the fallback engine (local) if one is set up; the note says so, in the language of the settings.
     `images`: JPEG files the engine looks at with the question."""
-    extra = (list(images),) if images else ()
     b = cfg['brain']
     engine = b['engine'] or 'claude'
     try:
-        return RUN[engine](prompt, b, *extra), engine, None
+        return RUN[engine](prompt, b, images), engine, None
     except BrainError as first:
         fallback = b.get('fallback')
         if engine != 'claude' or not fallback or fallback == engine:
             raise
         try:
-            answer = RUN[fallback](prompt, b, *extra)
+            answer = RUN[fallback](prompt, b, images)
         except BrainError as second:
             raise BrainError(f'{first}; then {fallback}: {second}', first.quota)
         return answer, fallback, handover_note(first, fallback, cfg.get('ui', {}).get('language', 'en'))
