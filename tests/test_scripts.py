@@ -3518,7 +3518,11 @@ for line in sys.stdin:
         continue
     if m['method'] == 'tools/call':
         with open(os.environ['FAKE_MCP_LOG'], 'a') as f:
-            f.write(json.dumps([sys.argv[1:], os.environ['FCP_PROJECTS_DIR'], m['params']]) + '\n')
+            f.write(json.dumps([sys.argv[1:], os.environ['FCP_PROJECTS_DIR'], m['params'], sorted(k for k in os.environ if 'KEY' in k)]) + '\n')
+        if os.environ['FAKE_MCP_SAYS'] == 'garbage':
+            print('[1, 2]', flush=True)
+            print(json.dumps({'jsonrpc': '2.0', 'id': m['id'], 'result': {'content': 'no list'}}), flush=True)
+            continue
         result = {'content': [{'type': 'text', 'text': os.environ['FAKE_MCP_SAYS']}], 'isError': os.environ['FAKE_MCP_SAYS'].startswith('Error')}
     else:
         result = {}
@@ -3541,13 +3545,14 @@ class LiveTest(Base):
         return mock.patch.dict(os.environ, {'ROUGHCUT_UVX': self.path('uvx'), 'FAKE_MCP_LOG': self.path('log'), 'FAKE_MCP_SAYS': says})
 
     def test_push_names_the_file_the_library_and_the_pinned_version(self):
-        with self.server('Imported into Final Cut Pro\nProject: edit'):
+        with self.server('Imported into Final Cut Pro\nProject: edit'), mock.patch.dict(os.environ, {'ROUGHCUT_API_KEY': 'sk-x'}):
             said = live.push(self.path('edit.fcpxml'), '/L/Mine.fcpbundle', 'fcp-mcp-server==0.35.0')
         self.assertEqual(said, 'Imported into Final Cut Pro Project: edit')
         with open(self.path('log')) as f:
-            argv, folder, params = json.loads(f.read())
+            argv, folder, params, keys = json.loads(f.read())
         self.assertEqual(argv, ['--from', 'fcp-mcp-server==0.35.0', 'fcp-mcp-server'])
         self.assertEqual(os.path.realpath(folder), os.path.realpath(self.dir))  # the server is kept to the project
+        self.assertEqual(keys, [])  # the server is given no key
         self.assertEqual(params['name'], 'deliver')
         self.assertEqual(params['arguments']['action'], 'push_to_fcp')
         self.assertEqual(params['arguments']['args'], {'filepath': os.path.abspath(self.path('edit.fcpxml')), 'confirm_unreviewed': True,
@@ -3556,12 +3561,45 @@ class LiveTest(Base):
     def test_a_refusal_is_an_error_with_the_reason(self):
         for says in ('Error: Final Cut Pro is not running', 'Not sent: two libraries are open'):
             with self.server(says), self.assertRaises(live.LiveError) as cm:
-                live.push(self.path('edit.fcpxml'))
+                live.push(self.path('edit.fcpxml'), None, 'fcp-mcp-server==0.35.0')
             self.assertIn(says[:20], str(cm.exception))
+
+    def test_only_a_pinned_release_of_the_server_is_run(self):
+        for package in ('fcp-mcp-server', 'other==1.0', 'git+https://example.com/x', 'fcp-mcp-server==1.0 --with evil'):
+            with self.server('Imported into X'), self.assertRaises(live.LiveError):
+                live.push(self.path('edit.fcpxml'), None, package)
+        self.assertFalse(os.path.exists(self.path('log')))
+
+    def test_a_server_that_fails_to_start_or_talks_nonsense_still_delivers(self):
+        with open(self.path('uvx'), 'w') as f:
+            f.write('#!/bin/sh\nexit 1\n')
+        before = threading.active_count()
+        how, said, opened = self.deliver('/Applications/Final Cut Pro.app', self.path('Mine.fcpbundle'))
+        self.assertEqual((how, len(opened)), ('pushed', 1))
+        self.assertTrue(all(t.daemon for t in threading.enumerate() if isinstance(t, threading.Timer)))  # nothing holds the exit
+        self.assertLessEqual(threading.active_count(), before)
+        with open(self.path('uvx'), 'w') as f:
+            f.write(FAKE_MCP)
+        how, said, opened = self.deliver('/Applications/Final Cut Pro.app', self.path('Mine.fcpbundle'), 'garbage')
+        self.assertEqual((how, len(opened)), ('pushed', 1))
+        self.assertIn('did not push', said[0])
+
+    def test_library_found_by_name_only_when_there_is_one(self):
+        hits = lambda *paths: mock.patch.object(fcp.subprocess, 'run', lambda cmd, **k: mock.Mock(stdout='\n'.join(paths), cmd=cmd))
+        os.makedirs(self.path('a/Mine.fcpbundle')); os.makedirs(self.path('b/Mine.fcpbundle')); os.makedirs(self.path('.Trash/Mine.fcpbundle'))
+        with mock.patch.object(fcp.shutil, 'which', lambda n: '/usr/bin/mdfind'):
+            with hits(self.path('.Trash/Mine.fcpbundle'), self.path('a/Mine.fcpbundle')):
+                self.assertEqual(fcp.library_path('Mine'), self.path('a/Mine.fcpbundle'))
+            with hits(self.path('a/Mine.fcpbundle'), self.path('b/Mine.fcpbundle')):
+                self.assertIsNone(fcp.library_path('Mine'))  # two of that name: Final Cut Pro asks
+            asked = []
+            with mock.patch.object(fcp.subprocess, 'run', lambda cmd, **k: asked.append(cmd) or mock.Mock(stdout='')):
+                self.assertIsNone(fcp.library_path('M*"ne'))
+        self.assertEqual(asked[0][1], 'kMDItemFSName == "M\\*\\"ne.fcpbundle"')
 
     def test_without_uv_the_reason_is_said(self):
         with mock.patch.object(live, 'uvx', lambda: None), self.assertRaises(live.LiveError) as cm:
-            live.push(self.path('edit.fcpxml'))
+            live.push(self.path('edit.fcpxml'), None, 'fcp-mcp-server==0.35.0')
         self.assertIn('uv is not installed', str(cm.exception))
 
     def deliver(self, app, library, says='Error: no'):
@@ -3657,6 +3695,12 @@ class VisualReviewTest(unittest.TestCase):
         self.assertEqual([b['file'] for b in edl['broll']], ['0.mp4'])  # B1 and B2 play first: files 2 and 1
         self.assertEqual([x['done'] for x in done], ['removed', 'removed', 'marker'])
         self.assertEqual(self.apply('not an object')[1:], (False, []))
+        self.assertEqual(self.apply({'cuts': 5, 'broll': 'B1'})[1:], (False, []))
+        edl = {'clips': [{'file': c['file']} for c in self.CLIPS], 'broll': [{'file': 'x.mp4'}]}
+        ordered = [(0, (Fraction(30), 0, 'x.mp4', 0.0, 2.0, '', 1))]
+        _, done = visual_review.apply(edl, self.CLIPS, {'broll': [{'id': 'B1', 'problem': 'blur', 'why': 'out\x0bof focus'}]}, ordered, None,
+                                      lambda e: None, Fraction(30), room=0)  # a later round, the share already taken
+        self.assertEqual((len(edl['broll']), done[0]['done'], done[0]['what']), (1, 'marker', 'out of focus'))
 
     def test_a_cut_can_ask_for_its_zoom(self):
         cfg = settings.load()
@@ -3691,13 +3735,30 @@ class BrainPicturesTest(Base):
         self.assertEqual(content[0], {'type': 'text', 'text': 'look'})
         self.assertEqual(content[1]['image_url']['url'], 'data:image/jpeg;base64,/9hqcGVn')
         seen = []
-        with mock.patch.object(brain, 'find_claude', lambda *a: '/bin/claude', create=True), \
-                mock.patch.dict(brain.RUN, {'claude': lambda prompt, b, *images: seen.append(images) or '{}'}):
+        with mock.patch.dict(brain.RUN, {'claude': lambda prompt, b, images=(): seen.append(list(images)) or '{}'}):
             cfg = settings.load()
             cfg['brain']['engine'] = 'claude'
             brain.ask('look', cfg, images=[self.path('sheet.jpg')])
             brain.ask('look', cfg)
-        self.assertEqual(seen, [([self.path('sheet.jpg')],), ()])  # engines without pictures are called as before
+        self.assertEqual(seen, [[self.path('sheet.jpg')], []])
+
+    def test_claude_reads_the_folder_of_the_pictures_and_nothing_else(self):
+        ran = []
+        def run(cmd, **k):
+            ran.append(cmd)
+            return mock.Mock(stdout=json.dumps({'result': '{}', 'is_error': False}), stderr='', returncode=0)
+        os.makedirs(self.path('review'))
+        b = dict(settings.load()['brain'], claude_model='')
+        with mock.patch.dict(os.environ, {'ROUGHCUT_CLAUDE': sys.executable}), mock.patch.object(brain.subprocess, 'run', run):
+            brain.ask_claude('look', b, [self.path('review/sheet.jpg')])
+            brain.ask_claude('look', b)
+        tools = lambda cmd: cmd[cmd.index('--tools') + 1]
+        self.assertEqual(tools(ran[0]), 'Read')
+        self.assertEqual(ran[0][ran[0].index('--allowedTools') + 1], f"Read(/{os.path.realpath(self.path('review'))}/**)")
+        self.assertEqual(ran[0][ran[0].index('--permission-mode') + 1], 'dontAsk')
+        self.assertNotIn('--add-dir', ran[0])
+        self.assertEqual(tools(ran[1]), '')  # no pictures: no tool at all, as before
+        self.assertNotIn('--allowedTools', ran[1])
 
 
 if __name__ == '__main__':
