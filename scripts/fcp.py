@@ -173,7 +173,8 @@ def check(path):
     return True, f'valid against the FCPXML {version} DTD of {os.path.basename(app)[:-4]}, media checked'
 
 def library_path(wanted):
-    """The .fcpbundle of a library given by its path, or by its name (found by Spotlight); None when there is none."""
+    """The .fcpbundle of a library given by its path, or by its name (found by Spotlight); None when there is none,
+    or more than one of that name."""
     if not wanted:
         return None
     p = os.path.expanduser(wanted)
@@ -181,9 +182,10 @@ def library_path(wanted):
         return os.path.abspath(p)
     if not shutil.which('mdfind'):
         return None
-    name = wanted.replace('\\', '\\\\').replace('"', '\\"')
+    name = re.sub(r'([\\"*])', r'\\\1', wanted)
     r = subprocess.run(['mdfind', f'kMDItemFSName == "{name}.fcpbundle"'], capture_output=True, text=True)
-    return next((line for line in r.stdout.splitlines() if os.path.isdir(line)), None)
+    found = [line for line in r.stdout.splitlines() if os.path.isdir(line) and '/.Trash' not in line]
+    return found[0] if len(found) == 1 else None  # two libraries of that name: Final Cut Pro asks, rather than a guess
 
 def import_copy(path, library):
     """A copy of the file that names the library to import into, so Final Cut Pro does not ask: <import-options>,
@@ -209,7 +211,12 @@ def open_in_fcp(path, library=None):
     app = find_app()
     if not app:
         raise SystemExit('Final Cut Pro not found (set FCP_APP to its name or path)')
-    subprocess.run(['open', '-a', app, import_copy(path, library) if library else path], check=True)
+    if library:
+        path = import_copy(path, library)
+        ok, msg = check(path)
+        if ok is False:
+            raise SystemExit(f'Not opened, the copy naming the library is invalid:\n{msg}')
+    subprocess.run(['open', '-a', app, path], check=True)
     return app
 
 def main():

@@ -5,7 +5,7 @@
 checks that the project arrived. Optional ("live.enabled"): without uv, or when the push is refused, the caller opens
 the file the usual way.
 Usage: live.py push file.fcpxml [--library name or .fcpbundle]   |   live.py libraries   |   live.py tools"""
-import argparse, json, os, shutil, subprocess, sys, threading
+import argparse, json, os, re, shutil, subprocess, sys, threading
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import settings
 
@@ -25,16 +25,27 @@ class Server:
         exe = uvx()
         if not exe:
             raise LiveError('uv is not installed (https://docs.astral.sh/uv/): it runs fcp-mcp-server')
-        # the server only reads and writes inside the folders it is given: the project's
-        env = dict(os.environ, FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder)
-        self.p = subprocess.Popen([exe, '--from', package, 'fcp-mcp-server'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, text=True, env=env)
+        if not re.fullmatch(r'fcp-mcp-server==\d+(\.\d+)*', package):  # one known release, never another package or a URL
+            raise LiveError(f'live.package must be fcp-mcp-server==<version>, not {package!r}')
+        # the server only reads and writes inside the folders it is given: the project's; and it is given no key
+        env = {k: v for k, v in os.environ.items() if not re.search(r'KEY|TOKEN|SECRET|PASSWORD', k, re.I)}
+        env.update(FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder)
+        try:
+            self.p = subprocess.Popen([exe, '--from', package, 'fcp-mcp-server'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, text=True, env=env)
+        except OSError as e:
+            raise LiveError(f'cannot run uvx ({e})')
         self.n = 0
         self.timer = threading.Timer(timeout, self.p.kill)  # a server that never answers does not hold the edit
+        self.timer.daemon = True
         self.timer.start()
-        self.ask('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {},
-                                'clientInfo': {'name': 'roughcut', 'version': os.environ.get('ROUGHCUT_VERSION', '0')}})
-        self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+        try:
+            self.ask('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {},
+                                    'clientInfo': {'name': 'roughcut', 'version': os.environ.get('ROUGHCUT_VERSION', '0')}})
+            self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+        except LiveError:
+            self.close()
+            raise
 
     def send(self, message):
         try:
@@ -51,17 +62,19 @@ class Server:
                 m = json.loads(line)
             except ValueError:
                 continue
-            if m.get('id') != self.n or 'method' in m:  # its own notifications and requests
+            if not isinstance(m, dict) or m.get('id') != self.n or 'method' in m:  # its own notifications and requests
                 continue
             if 'error' in m:
-                raise LiveError(str(m['error'].get('message', m['error']))[:400])
-            return m.get('result') or {}
+                e = m['error']
+                raise LiveError(str(e.get('message', e) if isinstance(e, dict) else e)[:400])
+            return m['result'] if isinstance(m.get('result'), dict) else {}
         raise LiveError('fcp-mcp-server gave no answer (not downloaded yet and offline, or too slow)')
 
     def call(self, tool, **arguments):
         """The text a tool answers; LiveError when the tool says it failed."""
         r = self.ask('tools/call', {'name': tool, 'arguments': arguments})
-        text = '\n'.join(c.get('text', '') for c in r.get('content', []) if c.get('type') == 'text').strip()
+        content = r.get('content') if isinstance(r.get('content'), list) else []
+        text = '\n'.join(str(c.get('text', '')) for c in content if isinstance(c, dict) and c.get('type') == 'text').strip()
         if r.get('isError'):
             raise LiveError(text[:400] or f'{tool} failed')
         return text
@@ -81,7 +94,7 @@ class Server:
     def __exit__(self, *_):
         self.close()
 
-def push(fcpxml, library=None, package='fcp-mcp-server'):
+def push(fcpxml, library, package):
     """The file imported by fcp-mcp-server's push_to_fcp; returns what it reports. With no library, the server takes
     the one library open in Final Cut Pro, and refuses when there are several or none."""
     path = os.path.abspath(fcpxml)
@@ -98,7 +111,7 @@ def push(fcpxml, library=None, package='fcp-mcp-server'):
 def deliver(path, cfg, say=print):
     """Puts the edit in Final Cut Pro, the surest way first: by fcp-mcp-server (checked import), else by a copy that
     names the library (fcp.import_copy: no question either, with any Final Cut Pro), else opened as it is (Final Cut
-    Pro asks which library). Returns 'pushed' when no question is asked, 'opened' otherwise."""
+    Pro asks which library). Returns 'pushed' when the edit was sent with its library named, 'opened' otherwise."""
     import fcp
     ok, msg = fcp.check(path)
     if ok is False:
@@ -109,7 +122,7 @@ def deliver(path, cfg, say=print):
         try:
             say('live: ' + push(path, library, cfg['live']['package']))
             return 'pushed'
-        except LiveError as e:
+        except Exception as e:  # whatever the server does, the edit is still delivered
             say(f'live: fcp-mcp-server did not push ({e})')
     elif app:  # the server addresses the app by that one name
         say(f'live: fcp-mcp-server only drives "Final Cut Pro", not {os.path.basename(app)[:-4]}')
