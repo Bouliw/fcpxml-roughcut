@@ -83,7 +83,7 @@ def main():
         splits, _ = splitedit.plan(clips, cfg_, splitedit.load_words(clips, tdir), float(fps))
     split = any(l or t for l, t in splits)  # then picture and sound are cut in different places: rendered apart
     tmp = tempfile.mkdtemp(prefix='preview_')
-    venc = encoder(h)
+    venc = encoder(args.height)
     try:
         listing, sounds = [], []
         for i, (c, gain, (scale, move, _), keys) in enumerate(zip(clips, gains, zooms, follows)):
