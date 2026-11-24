@@ -40,6 +40,7 @@ import fcpxml_merge  # noqa: E402
 import hesitations  # noqa: E402
 import install_quick_action  # noqa: E402
 import languages  # noqa: E402
+import live  # noqa: E402
 import loudness  # noqa: E402
 import make_fcpxml  # noqa: E402
 import make_srt  # noqa: E402
@@ -58,6 +59,7 @@ import subtitles  # noqa: E402
 import takeline  # noqa: E402
 import text_edit  # noqa: E402
 import verify_edit  # noqa: E402
+import visual_review  # noqa: E402
 import timeline  # noqa: E402
 import words  # noqa: E402
 import zoom  # noqa: E402
@@ -3507,6 +3509,195 @@ class AutoEditTest(unittest.TestCase):
             again = [x for x in json.load(f)['ranges'] if x['file'].endswith('C0001.mp4')]
         self.assertFalse(any(x['from'] < new - 0.01 and x['to'] > failed + 0.01 for x in again), again)
 
+
+FAKE_MCP = r"""#!%s
+import json, os, sys
+for line in sys.stdin:
+    m = json.loads(line)
+    if 'id' not in m:
+        continue
+    if m['method'] == 'tools/call':
+        with open(os.environ['FAKE_MCP_LOG'], 'a') as f:
+            f.write(json.dumps([sys.argv[1:], os.environ['FCP_PROJECTS_DIR'], m['params']]) + '\n')
+        result = {'content': [{'type': 'text', 'text': os.environ['FAKE_MCP_SAYS']}], 'isError': os.environ['FAKE_MCP_SAYS'].startswith('Error')}
+    else:
+        result = {}
+    print(json.dumps({'jsonrpc': '2.0', 'method': 'notifications/message', 'params': {}}), flush=True)
+    print(json.dumps({'jsonrpc': '2.0', 'id': m['id'], 'result': result}), flush=True)
+""" % sys.executable
+
+
+class LiveTest(Base):
+    """Live Mode without Final Cut Pro: a stand-in for uvx speaks the MCP stdio protocol."""
+    def setUp(self):
+        super().setUp()
+        with open(self.path('uvx'), 'w') as f:
+            f.write(FAKE_MCP)
+        os.chmod(self.path('uvx'), 0o755)
+        with open(self.path('edit.fcpxml'), 'w') as f:
+            f.write('<?xml version="1.0"?>\n<!DOCTYPE fcpxml>\n<fcpxml version="1.11">\n    <resources/>\n</fcpxml>\n')
+
+    def server(self, says):
+        return mock.patch.dict(os.environ, {'ROUGHCUT_UVX': self.path('uvx'), 'FAKE_MCP_LOG': self.path('log'), 'FAKE_MCP_SAYS': says})
+
+    def test_push_names_the_file_the_library_and_the_pinned_version(self):
+        with self.server('Imported into Final Cut Pro\nProject: edit'):
+            said = live.push(self.path('edit.fcpxml'), '/L/Mine.fcpbundle', 'fcp-mcp-server==0.35.0')
+        self.assertEqual(said, 'Imported into Final Cut Pro Project: edit')
+        with open(self.path('log')) as f:
+            argv, folder, params = json.loads(f.read())
+        self.assertEqual(argv, ['--from', 'fcp-mcp-server==0.35.0', 'fcp-mcp-server'])
+        self.assertEqual(os.path.realpath(folder), os.path.realpath(self.dir))  # the server is kept to the project
+        self.assertEqual(params['name'], 'deliver')
+        self.assertEqual(params['arguments']['action'], 'push_to_fcp')
+        self.assertEqual(params['arguments']['args'], {'filepath': os.path.abspath(self.path('edit.fcpxml')), 'confirm_unreviewed': True,
+                                                       'library_location': '/L/Mine.fcpbundle'})
+
+    def test_a_refusal_is_an_error_with_the_reason(self):
+        for says in ('Error: Final Cut Pro is not running', 'Not sent: two libraries are open'):
+            with self.server(says), self.assertRaises(live.LiveError) as cm:
+                live.push(self.path('edit.fcpxml'))
+            self.assertIn(says[:20], str(cm.exception))
+
+    def test_without_uv_the_reason_is_said(self):
+        with mock.patch.object(live, 'uvx', lambda: None), self.assertRaises(live.LiveError) as cm:
+            live.push(self.path('edit.fcpxml'))
+        self.assertIn('uv is not installed', str(cm.exception))
+
+    def deliver(self, app, library, says='Error: no'):
+        cfg = settings.load()
+        cfg['auto']['library'] = library
+        said, opened = [], []
+        with self.server(says), mock.patch.object(fcp, 'find_app', lambda: app), mock.patch.object(fcp, 'check', lambda p: (None, '')), \
+                mock.patch.object(fcp.subprocess, 'run', lambda cmd, **k: opened.append(cmd)):
+            return live.deliver(self.path('edit.fcpxml'), cfg, said.append), said, opened
+
+    def test_refused_push_falls_back_on_a_copy_that_names_the_library(self):
+        how, said, opened = self.deliver('/Applications/Final Cut Pro.app', self.path('Mine.fcpbundle'))
+        self.assertEqual(how, 'pushed')
+        self.assertIn('did not push', said[0])
+        self.assertEqual(opened, [['open', '-a', '/Applications/Final Cut Pro.app', self.path('edit_import.fcpxml')]])
+        root = ET.parse(self.path('edit_import.fcpxml')).getroot()
+        self.assertEqual(root[0].tag, 'import-options')  # first in the document, as the DTD wants
+        self.assertEqual(root[0][0].get('value'), 'file://' + os.path.abspath(self.path('Mine.fcpbundle')) + '/')
+        with open(self.path('edit.fcpxml')) as f:
+            self.assertNotIn('import-options', f.read())  # the original is left as it is
+
+    def test_the_trial_is_not_given_to_the_server(self):
+        how, said, opened = self.deliver('/Applications/Final Cut Pro Trial.app', self.path('Mine.fcpbundle'), 'Imported into X')
+        self.assertEqual(how, 'pushed')
+        self.assertFalse(os.path.exists(self.path('log')))
+        self.assertIn('Final Cut Pro Trial', said[0])
+        self.assertEqual(opened[0][-1], self.path('edit_import.fcpxml'))
+
+    def test_no_library_named_opens_as_before(self):
+        how, _, opened = self.deliver('/Applications/Final Cut Pro Trial.app', '')
+        self.assertEqual((how, opened[0][-1]), ('opened', self.path('edit.fcpxml')))
+
+    def test_pushed_by_the_server(self):
+        how, said, opened = self.deliver('/Applications/Final Cut Pro.app', '', 'Imported into Final Cut Pro')
+        self.assertEqual((how, opened), ('pushed', []))
+
+
+class VisualReviewTest(unittest.TestCase):
+    CLIPS = [{'file': 'a.mp4', 'off_s': 0.0, 'dur_s': 2.0}, {'file': 'a.mp4', 'off_s': 2.0, 'dur_s': 2.0},
+             {'file': 'b.mp4', 'off_s': 4.0, 'dur_s': 2.0}]
+
+    def test_sentence_cut_short_at_the_edge_of_a_cut(self):
+        expected = [(0.1, 0.4, 'Hello', 'a', 0.1), (0.5, 0.8, 'big', 'a', 0.5), (1.8, 1.95, 'world.', 'a', 1.8),
+                    (2.05, 2.3, 'Second', 'a', 9.0), (2.5, 2.8, 'good', 'a', 9.5), (3.0, 3.3, 'one.', 'a', 10.0)]
+        heard = [{'w': w, 'start': s, 'end': e} for s, e, w, _, _ in expected if w not in ('world.', 'good')]
+        short = visual_review.cut_short(expected, heard, self.CLIPS)
+        self.assertEqual([(x['at'], x['word']) for x in short], [(0.1, 'world.')])  # "good", inside its sentence, is not one
+        misheard = [{'w': 'whirl' if w == 'world.' else w, 'start': s, 'end': e} for s, e, w, _, _ in expected]
+        self.assertEqual(visual_review.cut_short(expected, misheard, self.CLIPS), [])  # heard as another word: not the cut's doing
+
+    def test_rows_show_both_sides_of_each_cut_and_each_broll(self):
+        rows = visual_review.rows_of(self.CLIPS, [(Fraction(30), 0, 'x.mp4', 1.0, 3.0, 'street', 1)], Fraction(30))
+        self.assertEqual([r[0] for r in rows], ['C1', 'C2', 'B1'])
+        (_, before), (_, after), (_, middle) = rows[0][1]
+        self.assertTrue(before < 2.0 < after < middle == 3.0)
+        self.assertEqual([round(t, 2) for _, t in rows[2][1]], [1.1, 2.0, 2.9])
+        many = [{'file': f'{k % 2 if k < 100 else "same"}.mp4', 'off_s': float(k), 'dur_s': 1.0} for k in range(150)]
+        shown = [r[0] for r in visual_review.rows_of(many, [], Fraction(30))]
+        self.assertEqual(len(shown), visual_review.MAX_CUTS)
+        self.assertIn('C120', shown)  # the cuts inside one take come first
+
+    def apply(self, answer, scales=(1, 1, 1), after=(1, 1.15, 1), broll=3):
+        edl = {'clips': [{'file': c['file']} for c in self.CLIPS], 'broll': [{'file': f'{i}.mp4'} for i in range(broll)]}
+        ordered = [(i, (Fraction(30 * (broll - i)), 0, f'{i}.mp4', 0.0, 2.0, '', 1)) for i in reversed(range(broll))]
+        changed, done = visual_review.apply(edl, self.CLIPS, answer, ordered, scales and list(scales), lambda e: after and list(after), Fraction(30))
+        return edl, changed, done
+
+    def test_jump_cut_gets_the_zoom_it_lacks(self):
+        edl, changed, done = self.apply({'cuts': [{'cut': 'C1', 'problem': 'jump', 'why': 'same frame'}]})
+        self.assertTrue(changed)
+        self.assertEqual(edl['clips'][1]['zoom'], True)
+        self.assertEqual([(x['at'], x['done']) for x in done], [(2.0, 'zoom')])
+
+    def test_what_cannot_be_mended_becomes_a_marker(self):
+        answer = {'cuts': [{'cut': 'C1', 'problem': 'jump'}, {'cut': 'C2', 'problem': 'look', 'why': 'reaches for the camera'},
+                           {'cut': 'C9', 'problem': 'blur'}, {'cut': 'C1', 'problem': 'delete everything'}, 'noise']}
+        edl, changed, done = self.apply(answer, after=(1, 1, 1))  # the zoom did not take: too short, or no face
+        self.assertFalse(changed)
+        self.assertNotIn('zoom', edl['clips'][1])
+        self.assertEqual([(x['kind'], x['done']) for x in done], [('jump', 'marker'), ('look', 'marker')])
+        marks = visual_review.markers(done + done, [{'at': 0.1, 'text': 'Hello big world.', 'word': 'world.'}], visual_review.TEXT['fr'])
+        self.assertEqual([m['at'] for m in marks], [2.0, 4.0, 0.1])
+        self.assertTrue(all(m['todo'] for m in marks))
+        self.assertEqual(marks[1]['text'], 'Relecture : regard hors caméra (reaches for the camera)')
+        _, changed, done = self.apply({'cuts': [{'cut': 'C1', 'problem': 'jump'}]}, scales=None, after=None)  # zooms off
+        self.assertEqual((changed, done[0]['done']), (False, 'marker'))
+
+    def test_at_most_half_of_the_broll_is_taken_off(self):
+        answer = {'broll': [{'id': 'B1', 'problem': 'misplaced'}, {'id': 'B2', 'problem': 'blur'}, {'id': 'B3', 'problem': 'blur'},
+                            {'id': 'B7', 'problem': 'blur'}, {'id': 'B1', 'problem': 'blur'}]}
+        edl, changed, done = self.apply(answer, broll=3)
+        self.assertTrue(changed)
+        self.assertEqual([b['file'] for b in edl['broll']], ['0.mp4'])  # B1 and B2 play first: files 2 and 1
+        self.assertEqual([x['done'] for x in done], ['removed', 'removed', 'marker'])
+        self.assertEqual(self.apply('not an object')[1:], (False, []))
+
+    def test_a_cut_can_ask_for_its_zoom(self):
+        cfg = settings.load()
+        a = {'width': 1920, 'height': 1080}
+        clips = [{'file': 'a.mp4', 'asset': a, 'in_s': float(4 * k), 'dur_s': 4.0, **more}
+                 for k, more in enumerate([{}, {}, {'zoom': False}, {}, {'file': 'b.mp4', 'zoom': True}])]
+        with mock.patch.object(zoom, 'face_centre', lambda *a: (0.5, 0.5)):
+            scales = [s for s, _, _ in zoom.plan(clips, cfg, {}, 1920, 1080)]
+        z = cfg['zoom']['scale']
+        self.assertEqual(scales, [1, z, 1, z, z])
+
+    def test_every_advanced_setting_is_a_default(self):
+        with open(os.path.join(os.path.dirname(visual_review.HERE), 'config', 'advanced.json'), encoding='utf-8') as f:
+            keys = [i['key'] for g in json.load(f)['groups'] for i in g['items']]
+        cfg = settings.load()
+        for key in ('visual_review.enabled', 'visual_review.rounds', 'visual_review.proxy_height', 'live.enabled'):
+            self.assertIn(key, keys)
+            section, name = key.split('.')
+            self.assertIn(name, cfg[section])
+        self.assertFalse(cfg['visual_review']['enabled'] or cfg['live']['enabled'])  # both are asked for
+
+
+class BrainPicturesTest(Base):
+    def test_pictures_go_with_the_question(self):
+        with open(self.path('sheet.jpg'), 'wb') as f:
+            f.write(b'\xff\xd8jpeg')
+        server = FakeServer(chat_reply('{"cuts": []}'))
+        self.addCleanup(server.close)
+        text = brain.ask_openai_compatible('look', server.url, 'm', None, 5, [self.path('sheet.jpg')])
+        self.assertEqual(text, '{"cuts": []}')
+        content = server.seen[0][1]['messages'][0]['content']
+        self.assertEqual(content[0], {'type': 'text', 'text': 'look'})
+        self.assertEqual(content[1]['image_url']['url'], 'data:image/jpeg;base64,/9hqcGVn')
+        seen = []
+        with mock.patch.object(brain, 'find_claude', lambda *a: '/bin/claude', create=True), \
+                mock.patch.dict(brain.RUN, {'claude': lambda prompt, b, *images: seen.append(images) or '{}'}):
+            cfg = settings.load()
+            cfg['brain']['engine'] = 'claude'
+            brain.ask('look', cfg, images=[self.path('sheet.jpg')])
+            brain.ask('look', cfg)
+        self.assertEqual(seen, [([self.path('sheet.jpg')],), ()])  # engines without pictures are called as before
 
 
 if __name__ == '__main__':

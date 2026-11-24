@@ -222,6 +222,15 @@
     "api_url": "",
     "timeout_seconds": 900
   },
+  "visual_review": {
+    "enabled": false,
+    "rounds": 2,
+    "proxy_height": 360
+  },
+  "live": {
+    "enabled": false,
+    "package": "fcp-mcp-server==0.35.0"
+  },
   "ui": {
     "language": "en"
   },

@@ -229,7 +229,7 @@ struct JobView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    Text(r.library.map { L10n.t("done.library", $0) } ?? L10n.t("done.libraryAny"))
+                    Text(r.pushed ? L10n.t("done.pushed") : r.library.map { L10n.t("done.library", $0) } ?? L10n.t("done.libraryAny"))
                         .font(.callout).multilineTextAlignment(.center)
                 } else {
                     Label(L10n.t("done.noFCP"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)

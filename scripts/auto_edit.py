@@ -16,7 +16,7 @@ Usage: auto_edit.py footage_folder [--work-dir dir] [--music ask|none|auto|file]
 import argparse, datetime, errno, fcntl, json, os, re, shutil, signal, subprocess, sys, tempfile, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import brain, dressing, fcp, retakes, review, settings, takeline, timeline
+import brain, dressing, fcp, live, retakes, review, settings, takeline, timeline
 from timeline import disk_path, fd
 from words import VERSION as WORDS_VERSION, with_corrections
 
@@ -28,6 +28,7 @@ UI = {
            'music_q': 'Music for "{name}"?', 'music_pick': 'Choose for me', 'music_none': 'No music',
            'music_folder_q': 'Choose your folder of royalty-free music (asked once).',
            'ready': '{name} is ready ({dur}{short}).', 'asking': ' Final Cut Pro is asking for a library{lib}.',
+           'pushed': ' It is in Final Cut Pro{lib}.', 'in_lib': ', in "{lib}"',
            'short': ', Short {dur}', 'shorts': ', {n} Shorts ({durs})', 'lib': ': choose "{lib}"',
            'fcp_old': 'Final Cut Pro {version} is too old to import the project: update it (10.6 or later).',
            'no_speech': 'No speech in the clips of "{name}": Roughcut edits from what is said.',
@@ -61,6 +62,7 @@ UI = {
            'music_q': 'Quelle musique pour « {name} » ?', 'music_pick': 'Laisser Roughcut choisir', 'music_none': 'Pas de musique',
            'music_folder_q': 'Choisissez votre dossier de musiques libres de droits (demandé une seule fois).',
            'ready': '{name} est prêt ({dur}{short}).', 'asking': ' Final Cut Pro demande une bibliothèque{lib}.',
+           'pushed': ' Il est dans Final Cut Pro{lib}.', 'in_lib': ', dans « {lib} »',
            'short': ', Short {dur}', 'shorts': ', {n} Shorts ({durs})', 'lib': ' : choisissez « {lib} »',
            'fcp_old': 'Final Cut Pro {version} est trop ancien pour importer le projet : mettez-le à jour (10.6 ou plus récent).',
            'no_speech': 'Aucune parole dans les rushs de « {name} » : Roughcut monte à partir de ce qui est dit.',
@@ -853,6 +855,13 @@ def main():
                 overlay = ['--overlay', made if os.path.exists(made) else os.path.join(project, 'captions.mov')]
             except RuntimeError as e:
                 run.say(f'captions of the edit: none ({e})')
+        if cfg['visual_review']['enabled']:  # the edit watched on contact sheets, mended, the rest marked (visual_review.py)
+            try:
+                out = run.script('visual_review.py', os.path.join(project, 'edl.json'), '--language', cfg['auto']['transcription_language'],
+                                 *(['--zoom-jump-cuts'] if cfg['auto']['zooms'] else []))
+                run.say('visual review: ' + (out.strip().splitlines() or ['done'])[-1])
+            except RuntimeError as e:  # the edit is worth more than its review
+                run.say(f'visual review: none ({e})')
         parts = [os.path.join(project, 'logged.fcpxml'), os.path.join(project, 'edit.fcpxml')]
         run.script('organize.py', *files, '-o', parts[0], '--analysis', adir, '--transcripts', tdir, '--event', 'logged',
                    '--fcpxml-version', version)
@@ -887,21 +896,26 @@ def main():
                                *(['CHAPTERS', *(f'{mmss(a)} {c}' for a, c in chapters), ''] if chapters else []),
                                'TAGS', ', '.join(d['tags']), '',
                                'SUBTITLES', 'subtitles.*.srt (in each video folder); words to check: to-check.txt', '']))
-        if cfg['auto']['open_in_final_cut'] and not args.no_open:
-            fcp.open_in_fcp(final)
         lib = cfg['auto']['library']
         opened = cfg['auto']['open_in_final_cut'] and not args.no_open
+        pushed = False
+        if opened and cfg['live']['enabled']:  # straight into its library, no question asked (live.py)
+            pushed = live.deliver(final, cfg, run.say) == 'pushed'
+        elif opened:
+            fcp.open_in_fcp(final)
         message = t['ready'].format(name=name, dur=mmss(length) + ('' if song else t['no_music']),
                                     short=(t['short'].format(dur=mmss(shorts_len[0])) if len(shorts_len) == 1 else
                                            t['shorts'].format(n=len(shorts_len), durs=', '.join(map(mmss, shorts_len))) if shorts_len else ''))
         if heard:
             message += f' {heard}.'
-        if opened:  # the library question is only there when Final Cut Pro was opened
+        if pushed:
+            message += t['pushed'].format(lib=t['in_lib'].format(lib=lib) if lib else '')
+        elif opened:  # the library question is only there when Final Cut Pro was opened
             message += t['asking'].format(lib=t['lib'].format(lib=lib) if lib else '')
         run.say(message + (f' ({note})' if note else ''))
         run.event('step', name='build', state='end')
         run.event('done', fcpxml=final, project=project, length=round(length, 2), shorts=[round(x, 2) for x in shorts_len],
-                  library=lib or None, note=note, music=song and os.path.basename(song), no_music=music_note or None,
+                  library=lib or None, pushed=pushed, note=note, music=song and os.path.basename(song), no_music=music_note or None,
                   retakes=heard, message=message + (f' {note}.' if note else ''))
         notify(title, message + (f' {note}.' if note else ''))
         print(final)

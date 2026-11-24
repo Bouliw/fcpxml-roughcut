@@ -38,6 +38,7 @@ struct EditResult {
     let library: String?
     let noMusic: String?
     let note: String?
+    var pushed = false  // already imported into Final Cut Pro (Live Mode): no library question
     var retakes: String? = nil  // the retakes called out loud: how many cut, where in the edit, how many left in
 
     /// " · Short 0:45", " · 3 Shorts", or nothing.
@@ -299,7 +300,7 @@ final class EditJob: ObservableObject {
                                 project: URL(fileURLWithPath: e["project"] as? String ?? ""),
                                 length: e["length"] as? Double ?? 0, shorts: e["shorts"] as? [Double] ?? [],
                                 library: e["library"] as? String, noMusic: e["no_music"] as? String, note: e["note"] as? String,
-                                retakes: e["retakes"] as? String)
+                                pushed: e["pushed"] as? Bool ?? false, retakes: e["retakes"] as? String)
         case "failed":
             state = .failed(e["why"] as? String ?? "?")
             detail = e["detail"] as? String
