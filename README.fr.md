@@ -434,6 +434,33 @@ Chaque bord de coupe est ensuite posé dans un vrai silence entendu dans le son,
 
 Une fois assemblée, chaque vidéo est réécoutée (`verify_edit.py`, `cuts.verify`) : son son, tel que Final Cut Pro le joue, est retranscrit et comparé à ce qui devait être gardé. Une hésitation encore entendue est coupée là où le son du rush tient une voyelle à l'écart de tout mot, aux mêmes conditions que plus haut (dans des silences, ou avec un raccord qui passe les contrôles) ; un mot à garder coupé au bord d'un plan fait reculer ce bord jusqu'au silence d'après ; un bout de mot coupé, entendu au bord, est retiré. Puis à nouveau (`cuts.verify_rounds`, 3 fois au plus), une correction n'étant jamais tentée deux fois, avec retour aux meilleures coupes si une écoute a empiré. Un raccord qui échoue à la dernière écoute est quand même défait, et le montage est réécouté une fois de plus, seulement pour caler ses mots. Les mots sont alors calés sur le son du montage lui-même (`final-words.json`) : les sous-titres animés et les SRT le suivent, pas les repères lus dans les rushs. `to-listen.txt` liste ce qui a été contrôlé, et où : hésitations coupées (dans des silences, ou collées aux mots avec leur raccord contrôlé), hésitations laissées, corrections.
 
+## Le montage regardé avant d'être livré (désactivé par défaut)
+
+Avec `visual_review.enabled` (Paramètres avancés, « Relecture et livraison »), le montage principal est regardé une fois assemblé, avant l'écriture du FCPXML (`visual_review.py`) :
+
+1. `render_preview.py --height 360` rend un petit proxy du montage, tel que Final Cut Pro le jouera.
+2. ffmpeg prend une image de chaque côté de chaque coupe et au milieu du plan qui suit, et trois par B-roll, et les pose sur des planches contact, une ligne par coupe, chaque image étiquetée avec sa coupe et son temps.
+3. Le son du proxy est transcrit à nouveau, avec le même modèle Whisper que les clips, et comparé aux mots gardés : une phrase dont le premier ou le dernier mot ne s'entend pas au bord d'une coupe a été tronquée.
+4. Le cerveau regarde les planches et nomme les sauts d'image, les regards caméra ratés, les plans flous et les B-roll qui ne vont pas avec ce qui est dit.
+
+Ce qui peut être corrigé sans toucher aux mots l'est dans `edl.json` : un saut d'image reçoit le zoom qui lui manque (`"zoom": true` sur la coupe), un B-roll flou ou mal placé est retiré (la moitié au plus). Tout le reste devient un marqueur rouge « à faire » à son temps, avec la raison. Après une correction, le montage est rendu et regardé une fois de plus, `visual_review.rounds` fois au plus (2). Le proxy, les planches, les questions posées et `visual-review.json` (ce qui a été vu et fait) restent dans le dossier `review/` du projet. Le moteur local demande un modèle qui lit les images ; si le cerveau ne répond pas, le montage est livré tel quel.
+
+```bash
+python3 scripts/visual_review.py edl.json --zoom-jump-cuts --language fr
+```
+
+## Directement dans Final Cut Pro : Live Mode (désactivé par défaut)
+
+Ouvrir un FCPXML fait demander à Final Cut Pro dans quelle bibliothèque importer. Avec `live.enabled`, et la bibliothèque indiquée dans les Réglages (son nom, ou le chemin de son `.fcpbundle`), le montage y arrive sans question :
+
+- avec [uv](https://docs.astral.sh/uv/) installé, par [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), lancé à la demande avec `uvx` à la version épinglée dans `live.package`, cantonné au dossier du projet : il envoie le fichier au Final Cut Pro ouvert et vérifie que le projet est arrivé. Seul son paquet de base sert : rien n'est transcrit deux fois, aucun second modèle de parole n'est téléchargé ;
+- sinon, ou s'il refuse (Final Cut Pro fermé, la version d'essai, à laquelle il ne s'adresse pas), par Roughcut lui-même : une copie du fichier qui nomme la bibliothèque (`<nom>_import.fcpxml`, avec `<import-options>`) est ouverte ;
+- sans bibliothèque indiquée, le fichier est ouvert comme avant et Final Cut Pro demande.
+
+```bash
+python3 scripts/live.py push edit.fcpxml --library "Ma bibliothèque"   # aussi : live.py libraries, live.py tools
+```
+
 ## Reprises signalées à voix haute (expérimental, désactivé par défaut)
 
 Avec `cuts.retakes` (Réglages › Paramètres avancés › Coupes), une prise que vous signalez ratée à voix haute est coupée : « on la refait », « je reprends », « take two », « let me start over »… (`cuts.retake_phrases`, en français et en anglais ; majuscules, ponctuation et hésitations au milieu ne comptent pas). La prise ratée et la phrase partent, la prise suivante reste. Trois choses décident ensemble :
@@ -534,6 +561,8 @@ Dans l'app, les Réglages s'en tiennent à ce que tout le monde peut vouloir (le
 | `takeline.py` | Les phrases que le prompteur Takeline a vu reprendre, retrouvées deux fois dans la transcription. |
 | `hesitations.py` | Le son lu de près : voyelles tenues des hésitations, vrais silences où couper. |
 | `verify_edit.py` | Réécoute un montage assemblé, corrige les hésitations et les mots coupés, cale les mots sur son son. |
+| `visual_review.py` | Regarde un montage assemblé sur des planches contact, corrige les sauts d'image et les B-roll, marque le reste. |
+| `live.py` | Envoie un FCPXML directement dans une bibliothèque Final Cut Pro (fcp-mcp-server, ou une copie qui nomme la bibliothèque). |
 | `text_edit.py` | Montage par le texte : la transcription avec ce que garde le montage, et une nouvelle version à partir des mots choisis. |
 | `zoom.py` | Calcule les zooms de `--zoom-jump-cuts`, ancrés sur le visage. |
 | `splitedit.py` | Calcule les J-cuts et L-cuts de `--split-edits`, vérifiés avec les transcriptions. |

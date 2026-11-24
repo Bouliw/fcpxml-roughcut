@@ -434,6 +434,33 @@ Every cut edge is then put in a true silence heard in the sound, next to the wor
 
 Once assembled, each video is listened to (`verify_edit.py`, `cuts.verify`): its sound, as Final Cut Pro plays it, is transcribed again and set against what was to be kept. A hesitation still heard is cut where the clip's own sound holds a vowel clear of every word, on the same terms as above (in silences, or a join that passes the checks); a word to keep cut at the edge of a cut gets that edge moved to the silence past it; a scrap of a word cut out, heard at an edge, is trimmed. Then again (`cuts.verify_rounds`, 3 at most), a fix never tried twice, and back to the better cuts if a round made it worse. A join that fails at the last listening still goes back, and the edit is listened to once more, only to time its words. The words are then timed on the sound of the edit itself (`final-words.json`): the animated captions and the SRT files follow it, not the times read in the clips. `to-listen.txt` lists what was checked, and where: hesitations cut (in silences, or touching the words with their joins checked), hesitations left in, fixes.
 
+## The edit watched before it is delivered (off by default)
+
+With `visual_review.enabled` (Advanced settings, "Review and delivery"), the main edit is watched once assembled, before the FCPXML is written (`visual_review.py`):
+
+1. `render_preview.py --height 360` renders a small proxy of the edit, as Final Cut Pro will play it.
+2. ffmpeg takes a picture on each side of every cut and in the middle of the shot that follows, and three per B-roll, and lays them on contact sheets, one row per cut, each picture labelled with its cut and its time.
+3. The sound of the proxy is transcribed again, with the same Whisper model as the clips, and set against the words kept: a sentence whose first or last word is not heard at the edge of a cut was cut short.
+4. The brain looks at the sheets and names the jump cuts, the missed looks at the camera, the blurred shots and the B-roll that does not fit what is said over it.
+
+What can be mended without touching the words is mended in `edl.json`: a jump cut gets the punch-in zoom it lacks (`"zoom": true` on the cut), a blurred or misplaced B-roll is taken off (half of them at most). Everything else becomes a red to-do marker at its time, with the reason. After a fix the edit is rendered and looked at once more, `visual_review.rounds` times at most (2). The proxy, the sheets, the questions asked and `visual-review.json` (what was seen and done) stay in the project's `review/` folder. The local engine needs a model that reads pictures; when the brain does not answer, the edit is delivered as it was.
+
+```bash
+python3 scripts/visual_review.py edl.json --zoom-jump-cuts --language fr
+```
+
+## Straight into Final Cut Pro: Live Mode (off by default)
+
+Opening an FCPXML makes Final Cut Pro ask which library to import into. With `live.enabled`, and the library named in the Settings (its name, or the path of its `.fcpbundle`), the edit lands in it with no question:
+
+- with [uv](https://docs.astral.sh/uv/) installed, by [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), run on demand with `uvx` at the version pinned in `live.package`, kept to the project folder: it sends the file to the running Final Cut Pro and checks that the project arrived. Only its base package is used: nothing is transcribed twice, no second speech model is downloaded;
+- otherwise, or when it refuses (Final Cut Pro closed, the trial version, which it does not address), by Roughcut itself: a copy of the file that names the library (`<name>_import.fcpxml`, with `<import-options>`) is opened;
+- with no library named, the file is opened as before and Final Cut Pro asks.
+
+```bash
+python3 scripts/live.py push edit.fcpxml --library "My library"   # also: live.py libraries, live.py tools
+```
+
 ## Retakes called out loud (experimental, off by default)
 
 With `cuts.retakes` (Settings › Advanced › Cuts), a take you call failed out loud is cut: "let me start over", "take two", "on la refait", "je reprends"... (`cuts.retake_phrases`, in French and in English; case, punctuation and hesitations in between do not count). The failed take and the phrase go, the take after it stays. Three things decide together:
@@ -534,6 +561,8 @@ In the app, the Settings keep to what everyone may want (the brain, the music, t
 | `takeline.py` | The sentences the Takeline teleprompter saw started over, found twice in the transcript. |
 | `hesitations.py` | The sound read closely: held vowels of hesitations, true silences to cut in. |
 | `verify_edit.py` | Listens to an assembled edit, fixes the hesitations and the words cut, times the words on its sound. |
+| `visual_review.py` | Watches an assembled edit on contact sheets, mends the jump cuts and the B-roll, marks the rest. |
+| `live.py` | Sends an FCPXML straight into a Final Cut Pro library (fcp-mcp-server, or a copy that names the library). |
 | `text_edit.py` | Editing by the text: the transcript with what the edit keeps, and a new version from the words chosen. |
 | `zoom.py` | Works out the punch-in zooms of `--zoom-jump-cuts`, anchored on the face. |
 | `splitedit.py` | Works out the J and L cuts of `--split-edits`, checked against the transcripts. |
