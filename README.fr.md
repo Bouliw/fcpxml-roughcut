@@ -374,7 +374,7 @@ Le module est adapté de [louisedesadeleer/b-roll-finder](https://github.com/lou
 
 ## Musique
 
-`music.py` donne le tempo et les temps forts de chaque morceau (librosa, ou celui de fcp-mcp-server via `uvx` quand librosa n'est pas installé ; en cache) et classe les morceaux d'un dossier pour un montage : assez longs d'abord, puis les plus proches de sa durée, puis un tempo dans la fourchette demandée. Le monteur choisit.
+`music.py` donne le tempo et les temps forts de chaque morceau (librosa, ou celui de fcp-mcp-server, lancé par `uv` depuis le projet verrouillé `config/live`, quand librosa n'est pas installé ; en cache) et classe les morceaux d'un dossier pour un montage : assez longs d'abord, puis les plus proches de sa durée, puis un tempo dans la fourchette demandée. Le monteur choisit.
 
 ```bash
 python3 scripts/music.py ~/Music/royalty-free --duration 480 --bpm 80-130

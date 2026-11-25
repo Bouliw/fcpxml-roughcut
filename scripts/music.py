@@ -3,10 +3,10 @@
 make_fcpxml.py and render_preview.py use for "music" in edl.json (the volume that ducks under speech, the beats the
 B-roll cuts snap to).
 
-Beats come from librosa. Without librosa here, the script borrows the one of fcp-mcp-server if uvx is installed
-(uvx --from "fcp-mcp-server[intelligence]"), as fcp-mcp-server does the same analysis; failing both, from a small
-beat tracker written with numpy (onset strength, tempo by autocorrelation, beats by dynamic programming). Results are
-cached.
+Beats come from librosa. Without librosa here, the script borrows the one of fcp-mcp-server if uv is installed
+(the "beats" extra of the locked project of live.py, hashes checked), as fcp-mcp-server does the same analysis;
+failing both, from a small beat tracker written with numpy (onset strength, tempo by autocorrelation, beats by
+dynamic programming). Results are cached.
 Usage: music.py track_or_folder [...] --duration 180 [--bpm 80-130] [--cache dir]
 
 In edl.json:
@@ -15,7 +15,7 @@ In edl.json:
 import argparse, hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from timeline import probe_audio, disk_path
-import settings
+import live, settings
 
 AUDIO = ('.mp3', '.m4a', '.wav', '.aif', '.aiff', '.flac', '.aac', '.ogg')
 SNIPPET = ('import json, sys\nfrom fcpxml.media_intel import detect_beats\n'
@@ -89,9 +89,10 @@ def beats(path, cache_dir=None):
         result = _librosa_beats(path)
     except ImportError:
         result = None
-    if result is None and shutil.which('uvx'):
-        r = subprocess.run(['uvx', '--from', 'fcp-mcp-server[intelligence]', 'python', '-c', SNIPPET, path],
-                           capture_output=True, text=True)
+    exe = live.uv() if result is None else None
+    if exe:
+        cmd, env = live.locked(exe, '--extra', 'beats', 'python', '-c', SNIPPET, path)
+        r = subprocess.run(cmd, capture_output=True, text=True, env=env)
         if r.returncode == 0 and r.stdout.strip():
             found = json.loads(r.stdout.strip().splitlines()[-1])
             result = {'bpm': round(found['bpm'], 1), 'beats': [round(b, 3) for b in found['beats']]}

@@ -374,7 +374,7 @@ The module is adapted from [louisedesadeleer/b-roll-finder](https://github.com/l
 
 ## Music
 
-`music.py` gives the tempo and beats of each track (librosa, or the one of fcp-mcp-server through `uvx` when librosa is not installed; cached) and ranks the tracks of a folder for an edit: long enough first, then the closest to its length, then a tempo in the range asked for. The editor picks.
+`music.py` gives the tempo and beats of each track (librosa, or the one of fcp-mcp-server, run by `uv` from the locked project `config/live`, when librosa is not installed; cached) and ranks the tracks of a folder for an edit: long enough first, then the closest to its length, then a tempo in the range asked for. The editor picks.
 
 ```bash
 python3 scripts/music.py ~/Music/royalty-free --duration 480 --bpm 80-130

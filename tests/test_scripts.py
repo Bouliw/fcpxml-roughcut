@@ -836,6 +836,31 @@ class MusicTest(Base):
         self.assertGreaterEqual(len(inside), 34)
         self.assertTrue(all(abs(b - round(b * 2) / 2) < 0.05 for b in inside), inside)  # on the clicks, every 0.5 s
 
+    def test_beats_borrowed_from_the_locked_project_and_found_without_uv(self):
+        track = self.path('a.wav')
+        open(track, 'w').close()
+        ran = []
+        def run(cmd, **k):
+            ran.append((cmd, k['env']))
+            return mock.Mock(returncode=0, stdout='noise\n{"bpm": 120.04, "beats": [0.5004, 1.0]}\n')
+        no_librosa = mock.patch.object(music, '_librosa_beats', mock.Mock(side_effect=ImportError))
+        with no_librosa, mock.patch.object(live, 'uv', lambda: '/x/uv'), mock.patch.object(music.subprocess, 'run', run), \
+                mock.patch.dict(os.environ, {'ROUGHCUT_API_KEY': 'sk-x'}):
+            self.assertEqual(music.beats(track), {'bpm': 120.0, 'beats': [0.5, 1.0]})
+        cmd, env = ran[0]
+        self.assertEqual(cmd, ['/x/uv', 'run', '--quiet', '--frozen', '--project', live.LOCKED, '--extra', 'beats',
+                               'python', '-c', music.SNIPPET, track])  # as locked, never resolved again
+        self.assertNotIn('ROUGHCUT_API_KEY', env)
+        with open(os.path.join(live.LOCKED, 'pyproject.toml')) as f:
+            self.assertRegex(f.read(), r'beats = \["fcp-mcp-server\[intelligence\]==\d+(\.\d+)+"\]')
+        ran.clear()  # without uv, or when it fails: the beat tracker written with numpy
+        for exe, code in ((None, 0), ('/x/uv', 1)):
+            fails = lambda cmd, **k: ran.append(cmd) or mock.Mock(returncode=code, stdout='')
+            with no_librosa, mock.patch.object(live, 'uv', lambda: exe), mock.patch.object(music.subprocess, 'run', fails), \
+                    mock.patch.object(music, '_numpy_beats', lambda p: {'bpm': 90.0, 'beats': [1.0]}):
+                self.assertEqual(music.beats(track), {'bpm': 90.0, 'beats': [1.0]})
+        self.assertEqual(len(ran), 1)  # nothing is run when uv is missing
+
     def test_slow_ramps_and_a_gap_too_short_for_a_full_rise(self):
         cfg = settings.load()
         cfg['music'].update(duck_db=-20, ramp_down_seconds=0.8, ramp_up_seconds=1.5, min_gap_seconds=2.0)
