@@ -3532,25 +3532,26 @@ for line in sys.stdin:
 
 
 class LiveTest(Base):
-    """Live Mode without Final Cut Pro: a stand-in for uvx speaks the MCP stdio protocol."""
+    """Live Mode without Final Cut Pro: a stand-in for uv speaks the MCP stdio protocol."""
     def setUp(self):
         super().setUp()
-        with open(self.path('uvx'), 'w') as f:
+        with open(self.path('uv'), 'w') as f:
             f.write(FAKE_MCP)
-        os.chmod(self.path('uvx'), 0o755)
+        os.chmod(self.path('uv'), 0o755)
         with open(self.path('edit.fcpxml'), 'w') as f:
             f.write('<?xml version="1.0"?>\n<!DOCTYPE fcpxml>\n<fcpxml version="1.11">\n    <resources/>\n</fcpxml>\n')
 
     def server(self, says):
-        return mock.patch.dict(os.environ, {'ROUGHCUT_UVX': self.path('uvx'), 'FAKE_MCP_LOG': self.path('log'), 'FAKE_MCP_SAYS': says})
+        return mock.patch.dict(os.environ, {'ROUGHCUT_UV': self.path('uv'), 'FAKE_MCP_LOG': self.path('log'), 'FAKE_MCP_SAYS': says})
 
-    def test_push_names_the_file_the_library_and_the_pinned_version(self):
+    def test_push_names_the_file_the_library_and_runs_the_locked_server(self):
         with self.server('Imported into Final Cut Pro\nProject: edit'), mock.patch.dict(os.environ, {'ROUGHCUT_API_KEY': 'sk-x'}):
-            said = live.push(self.path('edit.fcpxml'), '/L/Mine.fcpbundle', 'fcp-mcp-server==0.35.0')
+            said = live.push(self.path('edit.fcpxml'), '/L/Mine.fcpbundle')
         self.assertEqual(said, 'Imported into Final Cut Pro Project: edit')
         with open(self.path('log')) as f:
             argv, folder, params, keys = json.loads(f.read())
-        self.assertEqual(argv, ['--from', 'fcp-mcp-server==0.35.0', 'fcp-mcp-server'])
+        self.assertEqual(argv, ['run', '--quiet', '--frozen', '--project', live.LOCKED, 'fcp-mcp-server'])  # as locked, never resolved again
+        self.assertTrue(os.path.exists(os.path.join(live.LOCKED, 'uv.lock')))
         self.assertEqual(os.path.realpath(folder), os.path.realpath(self.dir))  # the server is kept to the project
         self.assertEqual(keys, [])  # the server is given no key
         self.assertEqual(params['name'], 'deliver')
@@ -3561,24 +3562,29 @@ class LiveTest(Base):
     def test_a_refusal_is_an_error_with_the_reason(self):
         for says in ('Error: Final Cut Pro is not running', 'Not sent: two libraries are open'):
             with self.server(says), self.assertRaises(live.LiveError) as cm:
-                live.push(self.path('edit.fcpxml'), None, 'fcp-mcp-server==0.35.0')
+                live.push(self.path('edit.fcpxml'), None)
             self.assertIn(says[:20], str(cm.exception))
 
-    def test_only_a_pinned_release_of_the_server_is_run(self):
-        for package in ('fcp-mcp-server', 'other==1.0', 'git+https://example.com/x', 'fcp-mcp-server==1.0 --with evil'):
-            with self.server('Imported into X'), self.assertRaises(live.LiveError):
-                live.push(self.path('edit.fcpxml'), None, package)
-        self.assertFalse(os.path.exists(self.path('log')))
+    def test_the_lock_names_one_release_and_a_hash_for_every_package(self):
+        with open(os.path.join(live.LOCKED, 'pyproject.toml')) as f:
+            self.assertRegex(f.read(), r'dependencies = \["fcp-mcp-server==\d+(\.\d+)+"\]')
+        with open(os.path.join(live.LOCKED, 'uv.lock')) as f:
+            packages = f.read().split('[[package]]')[1:]
+        self.assertGreater(len(packages), 10)
+        for p in packages:
+            if 'source = { virtual' not in p:  # the project itself
+                self.assertIn('hash = "sha256:', p, p[:80])
+                self.assertIn('source = { registry = "https://pypi.org/simple" }', p, p[:80])
 
     def test_a_server_that_fails_to_start_or_talks_nonsense_still_delivers(self):
-        with open(self.path('uvx'), 'w') as f:
+        with open(self.path('uv'), 'w') as f:
             f.write('#!/bin/sh\nexit 1\n')
         before = threading.active_count()
         how, said, opened = self.deliver('/Applications/Final Cut Pro.app', self.path('Mine.fcpbundle'))
         self.assertEqual((how, len(opened)), ('pushed', 1))
         self.assertTrue(all(t.daemon for t in threading.enumerate() if isinstance(t, threading.Timer)))  # nothing holds the exit
         self.assertLessEqual(threading.active_count(), before)
-        with open(self.path('uvx'), 'w') as f:
+        with open(self.path('uv'), 'w') as f:
             f.write(FAKE_MCP)
         how, said, opened = self.deliver('/Applications/Final Cut Pro.app', self.path('Mine.fcpbundle'), 'garbage')
         self.assertEqual((how, len(opened)), ('pushed', 1))
@@ -3598,8 +3604,8 @@ class LiveTest(Base):
         self.assertEqual(asked[0][1], 'kMDItemFSName == "M\\*\\"ne.fcpbundle"')
 
     def test_without_uv_the_reason_is_said(self):
-        with mock.patch.object(live, 'uvx', lambda: None), self.assertRaises(live.LiveError) as cm:
-            live.push(self.path('edit.fcpxml'), None, 'fcp-mcp-server==0.35.0')
+        with mock.patch.object(live, 'uv', lambda: None), self.assertRaises(live.LiveError) as cm:
+            live.push(self.path('edit.fcpxml'), None)
         self.assertIn('uv is not installed', str(cm.exception))
 
     def deliver(self, app, library, says='Error: no'):

@@ -453,7 +453,7 @@ python3 scripts/visual_review.py edl.json --zoom-jump-cuts --language fr
 
 Opening an FCPXML makes Final Cut Pro ask which library to import into. With `live.enabled`, and the library named in the Settings (its name, or the path of its `.fcpbundle`), the edit lands in it with no question:
 
-- with [uv](https://docs.astral.sh/uv/) installed, by [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), run on demand with `uvx` at the version pinned in `live.package`, kept to the project folder: it sends the file to the running Final Cut Pro and checks that the project arrived. Only its base package is used: nothing is transcribed twice, no second speech model is downloaded;
+- with [uv](https://docs.astral.sh/uv/) installed, by [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), run on demand with `uv` from a locked project (`config/live`: its version and every package it depends on, with hashes that uv checks), kept to the project folder: it sends the file to the running Final Cut Pro and checks that the project arrived. Only its base package is used: nothing is transcribed twice, no second speech model is downloaded;
 - otherwise, or when it refuses (Final Cut Pro closed, the trial version, which it does not address), by Roughcut itself: a copy of the file that names the library (`<name>_import.fcpxml`, with `<import-options>`) is opened;
 - with no library named, the file is opened as before and Final Cut Pro asks.
 

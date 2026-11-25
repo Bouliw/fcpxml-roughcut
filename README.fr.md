@@ -453,7 +453,7 @@ python3 scripts/visual_review.py edl.json --zoom-jump-cuts --language fr
 
 Ouvrir un FCPXML fait demander à Final Cut Pro dans quelle bibliothèque importer. Avec `live.enabled`, et la bibliothèque indiquée dans les Réglages (son nom, ou le chemin de son `.fcpbundle`), le montage y arrive sans question :
 
-- avec [uv](https://docs.astral.sh/uv/) installé, par [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), lancé à la demande avec `uvx` à la version épinglée dans `live.package`, cantonné au dossier du projet : il envoie le fichier au Final Cut Pro ouvert et vérifie que le projet est arrivé. Seul son paquet de base sert : rien n'est transcrit deux fois, aucun second modèle de parole n'est téléchargé ;
+- avec [uv](https://docs.astral.sh/uv/) installé, par [fcp-mcp-server](https://github.com/DareDev256/fcp-mcp-server) (MIT), lancé à la demande avec `uv` depuis un projet verrouillé (`config/live` : sa version et chaque paquet dont il dépend, avec des hachages que uv vérifie), cantonné au dossier du projet : il envoie le fichier au Final Cut Pro ouvert et vérifie que le projet est arrivé. Seul son paquet de base sert : rien n'est transcrit deux fois, aucun second modèle de parole n'est téléchargé ;
 - sinon, ou s'il refuse (Final Cut Pro fermé, la version d'essai, à laquelle il ne s'adresse pas), par Roughcut lui-même : une copie du fichier qui nomme la bibliothèque (`<nom>_import.fcpxml`, avec `<import-options>`) est ouverte ;
 - sans bibliothèque indiquée, le fichier est ouvert comme avant et Final Cut Pro demande.
 
