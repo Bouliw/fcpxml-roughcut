@@ -1,6 +1,7 @@
 """Punch-in zooms on jump cuts: along a run of back-to-back cuts from the same source (one take, one framing), every
 other cut is scaled up (1.12 by default), so the cut reads as a change of shot instead of a jump. The zoom is
-anchored on the face: the frame moves so the face stays where it was. No zoom where the source changes.
+anchored on the face: the frame moves so the face stays where it was. No zoom where the source changes, unless the cut asks for
+it ("zoom": true in edl.json, false to leave it alone; the cuts that follow alternate from there).
 
 Face positions come from analyze.py (<clip>.analysis.json). A cut without a face is left alone: the zoom is there to
 hide a jump on someone talking, and a centred zoom on scenery only looks like a mistake. Positions are in Final Cut
@@ -36,6 +37,8 @@ def plan(clips, cfg, analyses, width, height, vertical=False):
     for c in clips:
         n = n + 1 if c['file'] == run_file else 0
         run_file = c['file']
+        if 'zoom' in c:  # asked for this cut (visual_review.py): the run alternates from here
+            n = 1 if c['zoom'] else 0
         a = c['asset']
         same_shape = (a['width'], a['height']) == (width, height)
         if vertical or n % 2 == 0 or c['dur_s'] < z['min_cut_seconds'] or not same_shape or c.get('role', 'dialogue') != 'dialogue':

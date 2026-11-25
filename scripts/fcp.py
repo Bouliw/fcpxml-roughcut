@@ -172,14 +172,50 @@ def check(path):
         return False, r.stderr.strip()
     return True, f'valid against the FCPXML {version} DTD of {os.path.basename(app)[:-4]}, media checked'
 
-def open_in_fcp(path):
-    """Opens the file in Final Cut Pro, which starts the import. Refuses a file that fails the DTD check."""
+def library_path(wanted):
+    """The .fcpbundle of a library given by its path, or by its name (found by Spotlight); None when there is none,
+    or more than one of that name."""
+    if not wanted:
+        return None
+    p = os.path.expanduser(wanted)
+    if p.endswith('.fcpbundle') and os.sep in p:  # one that does not exist yet is created by Final Cut Pro
+        return os.path.abspath(p)
+    if not shutil.which('mdfind'):
+        return None
+    name = re.sub(r'([\\"*])', r'\\\1', wanted)
+    r = subprocess.run(['mdfind', f'kMDItemFSName == "{name}.fcpbundle"'], capture_output=True, text=True)
+    found = [line for line in r.stdout.splitlines() if os.path.isdir(line) and '/.Trash' not in line]
+    return found[0] if len(found) == 1 else None  # two libraries of that name: Final Cut Pro asks, rather than a guess
+
+def import_copy(path, library):
+    """A copy of the file that names the library to import into, so Final Cut Pro does not ask: <import-options>,
+    first in the document. Written next to the original (<name>_import.fcpxml), which is left as it is."""
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    options = ('<import-options>\n        <option key="library location" value="file://' + quote(library.rstrip('/')) + '/"/>\n'
+               '        <option key="suppress warnings" value="1"/>\n    </import-options>')
+    text, n = re.subn(r'(<fcpxml\s[^>]*>)', lambda m: m.group(1) + '\n    ' + options, text, count=1)
+    if not n:
+        raise SystemExit(f'{path}: no <fcpxml version="..."> element')
+    out = os.path.splitext(path)[0] + '_import.fcpxml'
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(text)
+    return out
+
+def open_in_fcp(path, library=None):
+    """Opens the file in Final Cut Pro, which starts the import. Refuses a file that fails the DTD check. With a
+    library (the path of its .fcpbundle), Final Cut Pro imports into it without asking which one."""
     ok, msg = check(path)
     if ok is False:
         raise SystemExit(f'Not opened, the FCPXML is invalid:\n{msg}')
     app = find_app()
     if not app:
         raise SystemExit('Final Cut Pro not found (set FCP_APP to its name or path)')
+    if library:
+        path = import_copy(path, library)
+        ok, msg = check(path)
+        if ok is False:
+            raise SystemExit(f'Not opened, the copy naming the library is invalid:\n{msg}')
     subprocess.run(['open', '-a', app, path], check=True)
     return app
 

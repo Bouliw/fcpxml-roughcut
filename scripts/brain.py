@@ -10,7 +10,7 @@ up, and the caller is told so it can say it.
 Usage: brain.py choose [--config-dir dir]   (the first-launch question, again)
        brain.py set-key anthropic|openai    (stores an API key in the keychain)
        brain.py test [--config-dir dir]     (asks the brain for a two-word answer)"""
-import argparse, json, os, re, shutil, subprocess, sys, tempfile, urllib.error, urllib.request
+import argparse, base64, json, os, re, shutil, subprocess, sys, tempfile, urllib.error, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import settings
 
@@ -46,12 +46,24 @@ def _limit(text):
 
 # ---------------------------------------------------------------- engines
 
-def ask_claude(prompt, b):
-    """`claude -p`, no tools, no MCP servers, run from an empty folder so no project settings or hooks load."""
+def _picture(path):
+    with open(path, 'rb') as f:
+        return base64.b64encode(f.read()).decode('ascii')
+
+def ask_claude(prompt, b, images=()):
+    """`claude -p`, no tools, no MCP servers, run from an empty folder so no project settings or hooks load. With
+    pictures, the one tool that reads files, in their folder only."""
     exe = os.environ.get('ROUGHCUT_CLAUDE') or shutil.which('claude') or os.path.expanduser('~/.local/bin/claude')  # the app says where
     if not os.path.exists(exe):
         raise BrainError('Claude Code (claude) is not installed')
-    cmd = [exe, '-p', '--output-format', 'json', '--no-session-persistence', '--tools', '', '--strict-mcp-config']
+    cmd = [exe, '-p', '--output-format', 'json', '--no-session-persistence', '--strict-mcp-config']
+    if images:
+        # nothing but these pictures' folder can be read, whatever the footage or the transcript tells the model
+        folder = os.path.realpath(os.path.dirname(images[0]))
+        cmd += ['--tools', 'Read', '--allowedTools', f'Read(/{folder}/**)', '--permission-mode', 'dontAsk']
+        prompt = 'First look at each of these pictures, with the Read tool:\n' + '\n'.join(images) + '\n\n' + prompt
+    else:
+        cmd += ['--tools', '']
     if b.get('claude_model'):
         cmd += ['--model', b['claude_model']]
     with tempfile.TemporaryDirectory() as tmp:
@@ -81,12 +93,14 @@ def _post_json(url, body, headers, timeout):
         reason = getattr(e, 'reason', e)
         raise BrainError(f'{url}: {reason}', slow=isinstance(reason, TimeoutError) or 'timed out' in str(reason))
 
-def ask_openai_compatible(prompt, url, model, key, timeout):
-    """One chat completion from any OpenAI-compatible server (LM Studio, Ollama, OpenAI)."""
+def ask_openai_compatible(prompt, url, model, key, timeout, images=()):
+    """One chat completion from any OpenAI-compatible server (LM Studio, Ollama, OpenAI); pictures need a model that sees."""
     if not model:
         raise BrainError('no model set (brain.local_model or brain.api_model)')
+    content = prompt if not images else [{'type': 'text', 'text': prompt}] + [
+        {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,' + _picture(p)}} for p in images]
     out = _post_json(url.rstrip('/') + '/chat/completions',
-                     {'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': 0.2},
+                     {'model': model, 'messages': [{'role': 'user', 'content': content}], 'temperature': 0.2},
                      {'Authorization': f'Bearer {key}'} if key else {}, timeout)
     try:
         text = out['choices'][0]['message']['content'] or ''
@@ -104,9 +118,9 @@ def load_local_model(b):
         subprocess.run([lms, 'load', b['local_model'], '--context-length', str(b['local_context']), '-y'],
                        capture_output=True, text=True, timeout=600)
 
-def ask_local(prompt, b):
+def ask_local(prompt, b, images=()):
     load_local_model(b)
-    return ask_openai_compatible(prompt, b['local_url'], b['local_model'], None, b['timeout_seconds'])
+    return ask_openai_compatible(prompt, b['local_url'], b['local_model'], None, b['timeout_seconds'], images)
 
 def keychain_get(provider):
     r = subprocess.run(['security', 'find-generic-password', '-s', KEYCHAIN, '-a', provider, '-w'], capture_output=True, text=True)
@@ -116,18 +130,21 @@ def keychain_set(provider, key):
     subprocess.run(['security', 'add-generic-password', '-s', KEYCHAIN, '-a', provider, '-w', key, '-U'], check=True,
                    capture_output=True)
 
-def ask_anthropic(prompt, b, key):
+def ask_anthropic(prompt, b, key, images=()):
     try:
         import anthropic
     except ImportError:
         raise BrainError('the Anthropic SDK is not installed: pip install anthropic')
+    content = prompt if not images else [
+        {'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg', 'data': _picture(p)}} for p in images
+    ] + [{'type': 'text', 'text': prompt}]
     client = anthropic.Anthropic(api_key=key, base_url=b.get('api_url') or None, timeout=b['timeout_seconds'])
     try:
         # streaming for a long input; refusals fall back to another model on the server side
         with client.beta.messages.stream(model=b.get('api_model') or 'claude-opus-5', max_tokens=64000,
                                          betas=['server-side-fallback-2026-07-01'], fallbacks='default',
                                          thinking={'type': 'adaptive'}, output_config={'effort': 'high'},
-                                         messages=[{'role': 'user', 'content': prompt}]) as stream:
+                                         messages=[{'role': 'user', 'content': content}]) as stream:
             message = stream.get_final_message()
     except anthropic.AuthenticationError:
         raise BrainError('the Anthropic API key was refused')
@@ -141,14 +158,14 @@ def ask_anthropic(prompt, b, key):
         raise BrainError('the model declined the request')
     return ''.join(block.text for block in message.content if block.type == 'text')
 
-def ask_api(prompt, b):
+def ask_api(prompt, b, images=()):
     provider = b['api_provider']
     key = os.environ.get('ROUGHCUT_API_KEY') or keychain_get(provider)  # the app reads the keychain and passes it on
     if not key:
         raise BrainError(f'no {provider} key in the keychain: brain.py set-key {provider}')
     if provider == 'anthropic':
-        return ask_anthropic(prompt, b, key)
-    return ask_openai_compatible(prompt, b.get('api_url') or 'https://api.openai.com/v1', b['api_model'], key, b['timeout_seconds'])
+        return ask_anthropic(prompt, b, key, images)
+    return ask_openai_compatible(prompt, b.get('api_url') or 'https://api.openai.com/v1', b['api_model'], key, b['timeout_seconds'], images)
 
 RUN = {'claude': ask_claude, 'local': ask_local, 'api': ask_api}
 
@@ -158,19 +175,20 @@ def handover_note(first, engine, lang='en'):
     why = 'quota' if first.quota else 'slow' if first.slow else 'missing' if 'not installed' in str(first) else 'error'
     return t['handover'].format(why=t[why], engine=engine)
 
-def ask(prompt, cfg):
+def ask(prompt, cfg, images=()):
     """(answer, engine that answered, note for the user or None). The configured engine first; when claude does not
-    answer, the fallback engine (local) if one is set up; the note says so, in the language of the settings."""
+    answer, the fallback engine (local) if one is set up; the note says so, in the language of the settings.
+    `images`: JPEG files the engine looks at with the question."""
     b = cfg['brain']
     engine = b['engine'] or 'claude'
     try:
-        return RUN[engine](prompt, b), engine, None
+        return RUN[engine](prompt, b, images), engine, None
     except BrainError as first:
         fallback = b.get('fallback')
         if engine != 'claude' or not fallback or fallback == engine:
             raise
         try:
-            answer = RUN[fallback](prompt, b)
+            answer = RUN[fallback](prompt, b, images)
         except BrainError as second:
             raise BrainError(f'{first}; then {fallback}: {second}', first.quota)
         return answer, fallback, handover_note(first, fallback, cfg.get('ui', {}).get('language', 'en'))
@@ -186,8 +204,8 @@ def extract_json(text):
     except ValueError as e:
         raise BrainError(f'the answer is not valid JSON: {e}')
 
-def ask_json(prompt, cfg):
-    text, engine, note = ask(prompt, cfg)
+def ask_json(prompt, cfg, images=()):
+    text, engine, note = ask(prompt, cfg, images)
     return extract_json(text), engine, note
 
 # ---------------------------------------------------------------- first launch

@@ -223,13 +223,13 @@ struct JobView: View {
                 }
                 if app.finalCut != nil {
                     Button {
-                        app.openInFinalCut(r.fcpxml)
+                        if r.pushed, let fcp = app.finalCut { NSWorkspace.shared.open(fcp) } else { app.openInFinalCut(r.fcpxml) }  // sent already: no second import
                     } label: {
                         Label(L10n.t("done.open"), systemImage: "play.rectangle").font(.headline).frame(width: 240, height: 28)
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    Text(r.library.map { L10n.t("done.library", $0) } ?? L10n.t("done.libraryAny"))
+                    Text(r.pushed ? L10n.t("done.pushed") : r.library.map { L10n.t("done.library", $0) } ?? L10n.t("done.libraryAny"))
                         .font(.callout).multilineTextAlignment(.center)
                 } else {
                     Label(L10n.t("done.noFCP"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)

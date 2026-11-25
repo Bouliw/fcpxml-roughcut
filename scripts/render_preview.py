@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Quick preview of edl.json (1080p, or 1080x1920 if vertical), audio normalized to -14 LUFS.
-Usage: render_preview.py edl.json -o preview.mp4"""
+"""Quick preview of edl.json (1080p, or 1080x1920 if vertical; --height for a smaller proxy), audio normalized to
+-14 LUFS.
+Usage: render_preview.py edl.json -o preview.mp4 [--height 360]"""
 import argparse, sys, os, subprocess, tempfile, shutil, json, re, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from timeline import build
@@ -8,10 +9,10 @@ import broll, loudness, reframe, settings, splitedit, zoom
 import music as tracks
 from timeline import fd
 
-def encoder():
+def encoder(height=1080):
     enc = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], capture_output=True, text=True).stdout
     if 'h264_videotoolbox' in enc:
-        return ['-c:v', 'h264_videotoolbox', '-b:v', '10M']
+        return ['-c:v', 'h264_videotoolbox', '-b:v', f'{max(1, round(10 * (height / 1080) ** 2))}M']
     return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22']
 
 LOUDNORM = 'loudnorm=I=-14:TP=-1.5:LRA=11'
@@ -40,6 +41,7 @@ def main():
     parser.add_argument('--zoom-jump-cuts', action='store_true', help='show the zooms of make_fcpxml.py --zoom-jump-cuts')
     parser.add_argument('--follow-face', action='store_true', help='show the reframing of make_fcpxml.py --follow-face')
     parser.add_argument('--split-edits', action='store_true', help='play the J and L cuts of make_fcpxml.py --split-edits')
+    parser.add_argument('--height', type=int, default=1080, help='height of the picture, in lines (default 1080; 360 makes a quick proxy)')
     parser.add_argument('--overlay', help='video with transparency laid over the preview, as make_fcpxml.py --overlay does (captions.py)')
     parser.add_argument('--analysis', help='folder of the analyze.py results (default: analysis/ next to edl.json)')
     parser.add_argument('--config', help='settings file on top of config/defaults.json and the roughcut.json files found')
@@ -64,7 +66,10 @@ def main():
     fps = tl['fps']
     # Every clip ends up at the same size: a clip of another shape (a phone screen in a horizontal video) is
     # letterboxed, or cropped to fill a vertical Short, as Final Cut Pro does
-    w, h = (1080, 1920) if edl.get('vertical') else (2 * round(tl['width'] * 540 / tl['height']), 1080)
+    H = 2 * round(args.height / 2)
+    w, h = (2 * round(H * 9 / 32), H) if edl.get('vertical') else (2 * round(tl['width'] * H / 2 / tl['height']), H)
+    if args.height == 1080 and edl.get('vertical'):
+        w, h = 1080, 1920
     fit = f'increase,crop={w}:{h}' if edl.get('vertical') else f'decrease,pad={w}:{h}:-1:-1'
     vf = f'scale={w}:{h}:force_original_aspect_ratio={fit},setsar=1,fps={fps.numerator}/{fps.denominator},format=yuv420p'
     def follow_vf(keys, c):  # the vertical crop moves with the keyframes of --follow-face
@@ -78,7 +83,7 @@ def main():
         splits, _ = splitedit.plan(clips, cfg_, splitedit.load_words(clips, tdir), float(fps))
     split = any(l or t for l, t in splits)  # then picture and sound are cut in different places: rendered apart
     tmp = tempfile.mkdtemp(prefix='preview_')
-    venc = encoder()
+    venc = encoder(args.height)
     try:
         listing, sounds = [], []
         for i, (c, gain, (scale, move, _), keys) in enumerate(zip(clips, gains, zooms, follows)):

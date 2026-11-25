@@ -1054,6 +1054,69 @@
     },
     {
       "title": {
+        "en": "Review and delivery",
+        "fr": "Relecture et livraison"
+      },
+      "items": [
+        {
+          "key": "visual_review.enabled",
+          "type": "bool",
+          "label": {
+            "en": "Watch the edit before delivering it",
+            "fr": "Regarder le montage avant de le livrer"
+          },
+          "help": {
+            "en": "A small render of the edit is looked at on contact sheets and listened to again: jump cuts, looks away from the camera, blurred shots, B-roll out of place, sentences cut short. What can be mended is; the rest becomes red markers in Final Cut Pro. Adds a few minutes.",
+            "fr": "Un petit rendu du montage est regardé sur des planches contact et réécouté : sauts d'image, regards hors caméra, plans flous, B-roll mal placés, phrases coupées. Ce qui peut être corrigé l'est ; le reste devient des marqueurs rouges dans Final Cut Pro. Ajoute quelques minutes."
+          }
+        },
+        {
+          "key": "visual_review.rounds",
+          "type": "int",
+          "min": 1,
+          "max": 3,
+          "step": 1,
+          "label": {
+            "en": "Looks at most",
+            "fr": "Passes au plus"
+          },
+          "help": {
+            "en": "After a fix, the edit is rendered and looked at once more.",
+            "fr": "Après une correction, le montage est rendu et regardé une fois de plus."
+          }
+        },
+        {
+          "key": "visual_review.proxy_height",
+          "type": "int",
+          "min": 240,
+          "max": 1080,
+          "step": 120,
+          "unit": "px",
+          "label": {
+            "en": "Height of the render looked at",
+            "fr": "Hauteur du rendu regardé"
+          },
+          "help": {
+            "en": "Higher shows blur better and takes longer.",
+            "fr": "Plus haut montre mieux le flou et prend plus de temps."
+          }
+        },
+        {
+          "key": "live.enabled",
+          "type": "bool",
+          "label": {
+            "en": "Send straight into Final Cut Pro (Live Mode)",
+            "fr": "Envoyer directement dans Final Cut Pro (Live Mode)"
+          },
+          "help": {
+            "en": "The edit lands in the library named above with no question asked, through fcp-mcp-server when uv is installed, else by Roughcut itself. With no library named, Final Cut Pro asks as before.",
+            "fr": "Le montage arrive dans la bibliothèque indiquée plus haut sans question, par fcp-mcp-server si uv est installé, sinon par Roughcut lui-même. Sans bibliothèque indiquée, Final Cut Pro demande comme avant."
+          }
+        }
+      ]
+    },
+    {
+      "title": {
         "en": "Brain",
         "fr": "Cerveau"
       },
