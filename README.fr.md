@@ -5,7 +5,7 @@
 
 # fcpxml-roughcut
 
-[![Tests](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml/badge.svg)](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml)
+[![Tests](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml/badge.svg)](https://github.com/Bouliw/fcpxml-roughcut/actions/workflows/tests.yml) [![Release](https://img.shields.io/github/v/release/Bouliw/fcpxml-roughcut?sort=semver)](https://github.com/Bouliw/fcpxml-roughcut/releases/latest) [![License](https://img.shields.io/github/license/Bouliw/fcpxml-roughcut)](LICENSE)
 
 [English version](README.md)
 
