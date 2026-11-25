@@ -228,8 +228,7 @@
     "proxy_height": 360
   },
   "live": {
-    "enabled": false,
-    "package": "fcp-mcp-server==0.35.0"
+    "enabled": false
   },
   "ui": {
     "language": "en"

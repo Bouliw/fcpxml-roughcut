@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Live Mode: the edit sent straight into the running Final Cut Pro, with no library question, by fcp-mcp-server
-(https://github.com/DareDev256/fcp-mcp-server, MIT), an MCP server run on demand with uvx and pinned to one version
-("live.package"). It writes a copy of the FCPXML that names the library, sends it with Apple's Open Document event and
-checks that the project arrived. Optional ("live.enabled"): without uv, or when the push is refused, the caller opens
-the file the usual way.
+(https://github.com/DareDev256/fcp-mcp-server, MIT), an MCP server run on demand with uv from a locked project
+(config/live: its version and every package it depends on, each with its hashes, which uv checks). It writes a copy
+of the FCPXML that names the library, sends it with Apple's Open Document event and checks that the project arrived.
+Optional ("live.enabled"): without uv, or when the push is refused, the caller opens the file the usual way.
+To move to another release: change it in config/live/pyproject.toml, then `uv lock --project config/live`.
 Usage: live.py push file.fcpxml [--library name or .fcpbundle]   |   live.py libraries   |   live.py tools"""
 import argparse, json, os, re, shutil, subprocess, sys, threading
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -12,29 +13,31 @@ import settings
 class LiveError(Exception):
     """The push did not happen; the message says why, in plain words."""
 
-def uvx():
-    for p in (os.environ.get('ROUGHCUT_UVX'), shutil.which('uvx'), os.path.expanduser('~/.local/bin/uvx'),
-              '/opt/homebrew/bin/uvx', '/usr/local/bin/uvx'):
+LOCKED = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config', 'live')  # pyproject.toml, uv.lock
+
+def uv():
+    for p in (os.environ.get('ROUGHCUT_UV'), shutil.which('uv'), os.path.expanduser('~/.local/bin/uv'),
+              '/opt/homebrew/bin/uv', '/usr/local/bin/uv'):
         if p and os.path.exists(p):
             return p
     return None
 
 class Server:
     """One conversation with the server over stdio: JSON-RPC, one message per line (the MCP stdio transport)."""
-    def __init__(self, package, folder, timeout=180):
-        exe = uvx()
+    def __init__(self, folder, timeout=180):
+        exe = uv()
         if not exe:
             raise LiveError('uv is not installed (https://docs.astral.sh/uv/): it runs fcp-mcp-server')
-        if not re.fullmatch(r'fcp-mcp-server==\d+(\.\d+)*', package):  # one known release, never another package or a URL
-            raise LiveError(f'live.package must be fcp-mcp-server==<version>, not {package!r}')
         # the server only reads and writes inside the folders it is given: the project's; and it is given no key
         env = {k: v for k, v in os.environ.items() if not re.search(r'KEY|TOKEN|SECRET|PASSWORD', k, re.I)}
-        env.update(FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder)
+        # the lock is read as it is (--frozen), never resolved again; its environment is kept out of the app
+        env.update(FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder,
+                   UV_PROJECT_ENVIRONMENT=os.path.expanduser('~/Library/Caches/Roughcut/live'))
         try:
-            self.p = subprocess.Popen([exe, '--from', package, 'fcp-mcp-server'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                      stderr=subprocess.DEVNULL, text=True, env=env)
+            self.p = subprocess.Popen([exe, 'run', '--quiet', '--frozen', '--project', LOCKED, 'fcp-mcp-server'],
+                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
         except OSError as e:
-            raise LiveError(f'cannot run uvx ({e})')
+            raise LiveError(f'cannot run uv ({e})')
         self.n = 0
         self.timer = threading.Timer(timeout, self.p.kill)  # a server that never answers does not hold the edit
         self.timer.daemon = True
@@ -94,7 +97,7 @@ class Server:
     def __exit__(self, *_):
         self.close()
 
-def push(fcpxml, library, package):
+def push(fcpxml, library):
     """The file imported by fcp-mcp-server's push_to_fcp; returns what it reports. With no library, the server takes
     the one library open in Final Cut Pro, and refuses when there are several or none."""
     path = os.path.abspath(fcpxml)
@@ -102,7 +105,7 @@ def push(fcpxml, library, package):
     args = {'filepath': path, 'confirm_unreviewed': True}
     if library:
         args['library_location'] = library
-    with Server(package, os.path.dirname(path)) as s:
+    with Server(os.path.dirname(path)) as s:
         text = s.call('deliver', action='push_to_fcp', args=args)
     if not text.startswith(('Imported into', 'Sent to')):
         raise LiveError(text[:400] or 'no answer')
@@ -120,7 +123,7 @@ def deliver(path, cfg, say=print):
     app = fcp.find_app()
     if app and os.path.basename(app) == 'Final Cut Pro.app':
         try:
-            say('live: ' + push(path, library, cfg['live']['package']))
+            say('live: ' + push(path, library))
             return 'pushed'
         except Exception as e:  # whatever the server does, the edit is still delivered
             say(f'live: fcp-mcp-server did not push ({e})')
@@ -147,7 +150,7 @@ def main():
                 cfg['auto']['library'] = args.library
             print(deliver(args.file, cfg))
             return
-        with Server(cfg['live']['package'], folder) as s:
+        with Server(folder) as s:
             if args.action == 'tools':  # proves the server starts, without touching Final Cut Pro
                 print('\n'.join(t['name'] for t in s.ask('tools/list').get('tools', [])))
             else:
