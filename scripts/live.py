@@ -22,20 +22,23 @@ def uv():
             return p
     return None
 
+def locked(exe, *command, **more):
+    """(command line, environment) of a command run by uv in the locked project: the lock is read as it is (--frozen),
+    never resolved again; its environment is kept out of the app; and the command is given no key."""
+    env = {k: v for k, v in os.environ.items() if not re.search(r'KEY|TOKEN|SECRET|PASSWORD', k, re.I)}
+    env.update(UV_PROJECT_ENVIRONMENT=os.path.expanduser('~/Library/Caches/Roughcut/live'), **more)
+    return [exe, 'run', '--quiet', '--frozen', '--project', LOCKED, *command], env
+
 class Server:
     """One conversation with the server over stdio: JSON-RPC, one message per line (the MCP stdio transport)."""
     def __init__(self, folder, timeout=180):
         exe = uv()
         if not exe:
             raise LiveError('uv is not installed (https://docs.astral.sh/uv/): it runs fcp-mcp-server')
-        # the server only reads and writes inside the folders it is given: the project's; and it is given no key
-        env = {k: v for k, v in os.environ.items() if not re.search(r'KEY|TOKEN|SECRET|PASSWORD', k, re.I)}
-        # the lock is read as it is (--frozen), never resolved again; its environment is kept out of the app
-        env.update(FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder,
-                   UV_PROJECT_ENVIRONMENT=os.path.expanduser('~/Library/Caches/Roughcut/live'))
+        # the server only reads and writes inside the folders it is given: the project's
+        cmd, env = locked(exe, 'fcp-mcp-server', FCP_PROJECTS_DIR=folder, FCP_PROJECTS_DIRS=folder)
         try:
-            self.p = subprocess.Popen([exe, 'run', '--quiet', '--frozen', '--project', LOCKED, 'fcp-mcp-server'],
-                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+            self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
         except OSError as e:
             raise LiveError(f'cannot run uv ({e})')
         self.n = 0

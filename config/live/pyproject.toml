@@ -3,3 +3,6 @@ name = "roughcut-live"
 version = "0"
 requires-python = ">=3.10"
 dependencies = ["fcp-mcp-server==0.35.0"]
+
+[project.optional-dependencies]
+beats = ["fcp-mcp-server[intelligence]==0.35.0"]
