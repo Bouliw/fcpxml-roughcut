@@ -457,6 +457,8 @@ Ouvrir un FCPXML fait demander à Final Cut Pro dans quelle bibliothèque import
 - sinon, ou s'il refuse (Final Cut Pro fermé, la version d'essai, à laquelle il ne s'adresse pas), par Roughcut lui-même : une copie du fichier qui nomme la bibliothèque (`<nom>_import.fcpxml`, avec `<import-options>`) est ouverte ;
 - sans bibliothèque indiquée, le fichier est ouvert comme avant et Final Cut Pro demande.
 
+Testé avec la version d'essai de Final Cut Pro, par le chemin de Roughcut lui-même (la copie qui nomme la bibliothèque) : le montage, le Short, les plans, marqueurs, titres et fondus arrivent dans la bibliothèque indiquée. Deux points ne sont pas encore vérifiés : l'envoi par fcp-mcp-server, qui refuse la version d'essai, et une bibliothèque qui n'existe pas encore (indiquez-en une qui existe).
+
 ```bash
 python3 scripts/live.py push edit.fcpxml --library "Ma bibliothèque"   # aussi : live.py libraries, live.py tools
 ```

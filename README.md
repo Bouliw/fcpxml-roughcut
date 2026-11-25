@@ -457,6 +457,8 @@ Opening an FCPXML makes Final Cut Pro ask which library to import into. With `li
 - otherwise, or when it refuses (Final Cut Pro closed, the trial version, which it does not address), by Roughcut itself: a copy of the file that names the library (`<name>_import.fcpxml`, with `<import-options>`) is opened;
 - with no library named, the file is opened as before and Final Cut Pro asks.
 
+Tested with the trial version of Final Cut Pro, on Roughcut's own path (the copy that names the library): the edit, the Short, the clips, markers, titles and dissolves arrive in the library named. Two things are not verified yet: the push by fcp-mcp-server, which refuses the trial version, and a library that does not exist yet (give one that exists).
+
 ```bash
 python3 scripts/live.py push edit.fcpxml --library "My library"   # also: live.py libraries, live.py tools
 ```
